@@ -34,7 +34,7 @@
 </header>
 
 <main>
-  <p id="status" style="color:var(--muted);text-align:center">טוען…</p>
+  <p id="status" class="hidden" style="color:var(--muted);text-align:center"></p>
 
   <section id="loginView" class="hidden" style="text-align:center;padding-top:40px">
     <p>כדי ליצור ולנהל טיולים, התחבר עם חשבון Google.</p>
@@ -62,8 +62,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js";
   import {
-    getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult,
-    onAuthStateChanged, signOut
+    getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut
   } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js";
   import {
     getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp
@@ -86,16 +85,33 @@
   const $ = id => document.getElementById(id);
   let unsubscribeTrips = null;
 
-  // Surface errors from the redirect sign-in (for example, an unauthorized domain)
-  getRedirectResult(auth).catch(err => {
-    $('status').textContent = 'ההתחברות נכשלה: ' + err.code;
+  function showStatus(msg) {
+    const s = $('status');
+    s.textContent = msg;
+    s.classList.remove('hidden');
+  }
+
+  function clearStatus() {
+    $('status').classList.add('hidden');
+  }
+
+  $('signInBtn').addEventListener('click', async () => {
+    clearStatus();
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (err) {
+      if (err.code === 'auth/popup-blocked') {
+        showStatus('הדפדפן חסם את חלון ההתחברות. אפשר חלונות קופצים ונסה שוב.');
+      } else if (err.code !== 'auth/cancelled-popup-request' && err.code !== 'auth/popup-closed-by-user') {
+        showStatus('ההתחברות נכשלה: ' + err.code);
+      }
+    }
   });
 
-  $('signInBtn').addEventListener('click', () => signInWithRedirect(auth, provider));
   $('signOutBtn').addEventListener('click', () => signOut(auth));
 
   onAuthStateChanged(auth, user => {
-    $('status').classList.add('hidden');
+    clearStatus();
     if (user) {
       $('loginView').classList.add('hidden');
       $('appView').classList.remove('hidden');
@@ -119,8 +135,7 @@
       renderTrips(trips);
     }, err => {
       $('tripList').innerHTML = '';
-      $('status').textContent = 'שגיאה בטעינת הטיולים: ' + err.code;
-      $('status').classList.remove('hidden');
+      showStatus('שגיאה בטעינת הטיולים: ' + err.code);
     });
   }
 
