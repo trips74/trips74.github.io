@@ -5,23 +5,35 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>הטיולים שלי</title>
 <style>
-  :root{--ink:#1F2E2E;--paper:#F4F7F2;--olive-dk:#0F3D3E;--clay:#C1622D;--line:#D7E0DB;--muted:#6C8481;}
+  :root{--ink:#1F2E2E;--paper:#F4F7F2;--olive-dk:#0F3D3E;--clay:#C1622D;--line:#D7E0DB;--muted:#6C8481;--ok:#2E7D4F;--danger:#B23B2E;}
   *{box-sizing:border-box}
   body{margin:0;font-family:Heebo,sans-serif;background:var(--paper);color:var(--ink);min-height:100vh}
   header{background:var(--olive-dk);color:var(--paper);padding:20px}
   header h1{margin:0;font-size:24px}
   main{padding:16px;max-width:560px;margin:auto}
   button{font:inherit;border:0;border-radius:10px;padding:12px 16px;cursor:pointer}
+  button:disabled{opacity:.5;cursor:default}
   .primary{background:var(--clay);color:#fff;width:100%}
   .ghost{background:transparent;color:var(--paper);border:1px solid rgba(244,247,242,.5)}
-  .secondary{background:var(--line)}
+  .secondary{background:var(--line);color:var(--ink)}
+  .danger{background:var(--danger);color:#fff;width:100%}
+  .ok{background:var(--ok);color:#fff;width:100%}
   .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;margin:10px 0}
+  .card.clickable{cursor:pointer}
   .card small{color:var(--muted)}
-  input{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font:inherit;margin:6px 0 12px}
+  label{display:block;font-size:14px;margin-top:8px}
+  input{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font:inherit;margin:6px 0 4px;background:#fff}
+  input:disabled{background:var(--paper)}
   .hidden{display:none !important}
   .empty{color:var(--muted);text-align:center;padding:24px}
-  .row{display:flex;gap:8px}
+  .row{display:flex;gap:8px;margin-top:12px}
+  .row > *{flex:1}
   #userBar{display:flex;justify-content:space-between;align-items:center;margin-top:10px}
+  .badge{display:inline-block;font-size:12px;padding:3px 10px;border-radius:999px;background:var(--line);color:var(--ink)}
+  .badge.ok{background:var(--ok);color:#fff;width:auto}
+  .back{background:transparent;color:var(--clay);padding:6px 0;margin-bottom:8px}
+  .section{margin-top:16px;border-top:1px solid var(--line);padding-top:12px}
+  .note{color:var(--muted);font-size:13px;margin:6px 0}
 </style>
 </head>
 <body>
@@ -34,7 +46,7 @@
 </header>
 
 <main>
-  <p id="status" class="hidden" style="color:var(--muted);text-align:center"></p>
+  <p id="status" class="hidden" style="color:var(--danger);text-align:center"></p>
 
   <section id="loginView" class="hidden" style="text-align:center;padding-top:40px">
     <p>כדי ליצור ולנהל טיולים, התחבר עם חשבון Google.</p>
@@ -42,7 +54,8 @@
     <p style="color:var(--muted);font-size:13px">אם נפתחת מתוך וואטסאפ, פתח את הקישור בספארי או בכרום.</p>
   </section>
 
-  <section id="appView" class="hidden">
+  <!-- LIST VIEW -->
+  <section id="listView" class="hidden">
     <button class="primary" id="newTripBtn">טיול חדש</button>
 
     <form id="newTripForm" class="card hidden">
@@ -57,6 +70,39 @@
 
     <div id="tripList"></div>
   </section>
+
+  <!-- TRIP DETAIL VIEW -->
+  <section id="tripView" class="hidden">
+    <button class="back" id="backBtn">← חזרה לרשימה</button>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <h2 id="detailTitle" style="margin:0;font-size:22px"></h2>
+      <span id="detailBadge" class="badge">טיוטה</span>
+    </div>
+    <p id="ownerNote" class="note hidden"></p>
+
+    <form id="tripForm" class="section">
+      <label>שם הטיול<input id="dTitle" required maxlength="80"></label>
+      <label>תאריך התחלה<input id="dStart" type="date" required></label>
+      <label>תאריך סיום<input id="dEnd" type="date" required></label>
+      <label>שעת יציאה<input id="dTime" type="time" value="08:00"></label>
+      <label>מיקום (לתחזית מזג אוויר)<input id="dLocation" maxlength="80" placeholder="למשל: צפת"></label>
+      <div class="row">
+        <button class="primary" type="submit" id="saveBtn">שמור שינויים</button>
+      </div>
+    </form>
+
+    <div class="section">
+      <button class="ok" id="confirmBtn">אשר את הטיול</button>
+      <p class="note" id="confirmNote"></p>
+    </div>
+
+    <div class="section">
+      <button class="danger" id="deleteBtn">מחק טיול</button>
+      <p class="note">מחיקה היא סופית, ורק הבעלים יכול למחוק.</p>
+    </div>
+    <p id="detailStatus" class="note" style="text-align:center"></p>
+  </section>
 </main>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -67,10 +113,10 @@
     getAuth, GoogleAuthProvider, signInWithCredential, onAuthStateChanged, signOut
   } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js";
   import {
-    getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp
+    getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp,
+    doc, updateDoc, deleteDoc
   } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js";
 
-  // Paste the Web client ID from Firebase Console → Authentication → Sign-in method → Google → Web SDK configuration
   const GOOGLE_WEB_CLIENT_ID = "494703540488-6doup5uslfs4f6q5o332nntp6gt9ef1v.apps.googleusercontent.com";
 
   const firebaseConfig = {
@@ -88,19 +134,23 @@
 
   const $ = id => document.getElementById(id);
   let unsubscribeTrips = null;
+  let trips = [];
+  let currentTripId = null;
+  let currentUser = null;
 
   function showStatus(msg) {
     const s = $('status');
     s.textContent = msg;
     s.classList.remove('hidden');
   }
+  function clearStatus() { $('status').classList.add('hidden'); }
 
-  function clearStatus() {
-    $('status').classList.add('hidden');
+  function showView(name) {
+    $('listView').classList.toggle('hidden', name !== 'list');
+    $('tripView').classList.toggle('hidden', name !== 'trip');
   }
 
-  // Google Identity Services gives us a Google ID token directly in the page,
-  // so the login does not depend on the firebaseapp.com domain or its storage.
+  // ---------- Login (Google Identity Services) ----------
   async function handleCredential(response) {
     clearStatus();
     try {
@@ -116,10 +166,7 @@
       setTimeout(initGoogleButton, 200);
       return;
     }
-    google.accounts.id.initialize({
-      client_id: GOOGLE_WEB_CLIENT_ID,
-      callback: handleCredential
-    });
+    google.accounts.id.initialize({ client_id: GOOGLE_WEB_CLIENT_ID, callback: handleCredential });
     google.accounts.id.renderButton($('gsiButton'), {
       theme: 'outline', size: 'large', text: 'signin_with', locale: 'he'
     });
@@ -130,34 +177,40 @@
 
   onAuthStateChanged(auth, user => {
     clearStatus();
+    currentUser = user;
     if (user) {
       $('loginView').classList.add('hidden');
-      $('appView').classList.remove('hidden');
       $('userBar').classList.remove('hidden');
       $('userName').textContent = user.displayName || user.email;
+      showView('list');
       loadTrips(user.uid);
     } else {
-      $('appView').classList.add('hidden');
       $('userBar').classList.add('hidden');
+      $('listView').classList.add('hidden');
+      $('tripView').classList.add('hidden');
       $('loginView').classList.remove('hidden');
+      currentTripId = null;
       if (unsubscribeTrips) { unsubscribeTrips(); unsubscribeTrips = null; }
     }
   });
 
+  // ---------- Trips list ----------
   function loadTrips(uid) {
     if (unsubscribeTrips) unsubscribeTrips();
     const q = query(collection(db, 'trips'), where('memberUids', 'array-contains', uid));
     unsubscribeTrips = onSnapshot(q, snap => {
-      const trips = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      trips = snap.docs.map(d => ({ id: d.id, ...d.data() }))
         .sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
-      renderTrips(trips);
+      renderTrips();
+      if (currentTripId) renderTripDetail();
     }, err => {
-      $('tripList').innerHTML = '';
+      trips = [];
+      renderTrips();
       showStatus('שגיאה בטעינת הטיולים: ' + err.code);
     });
   }
 
-  function renderTrips(trips) {
+  function renderTrips() {
     const list = $('tripList');
     list.innerHTML = '';
     if (!trips.length) {
@@ -169,12 +222,17 @@
     }
     for (const t of trips) {
       const card = document.createElement('div');
-      card.className = 'card';
+      card.className = 'card clickable';
       const title = document.createElement('strong');
       title.textContent = t.title;
       const dates = document.createElement('small');
       dates.textContent = `${t.startDate} — ${t.endDate}`;
-      card.append(title, document.createElement('br'), dates);
+      const badge = document.createElement('span');
+      badge.className = 'badge' + (t.status === 'confirmed' ? ' ok' : '');
+      badge.style.marginInlineStart = '8px';
+      badge.textContent = t.status === 'confirmed' ? 'מאושר' : 'טיוטה';
+      card.append(title, badge, document.createElement('br'), dates);
+      card.addEventListener('click', () => openTrip(t.id));
       list.appendChild(card);
     }
   }
@@ -184,8 +242,7 @@
 
   $('newTripForm').addEventListener('submit', async e => {
     e.preventDefault();
-    const user = auth.currentUser;
-    if (!user) return;
+    if (!currentUser) return;
     const startDate = $('startDate').value;
     const endDate = $('endDate').value;
     if (endDate < startDate) { alert('תאריך הסיום חייב להיות אחרי תאריך ההתחלה'); return; }
@@ -194,8 +251,11 @@
         title: $('tripTitle').value.trim(),
         startDate,
         endDate,
-        ownerUid: user.uid,
-        memberUids: [user.uid],
+        departureTime: '08:00',
+        location: '',
+        status: 'draft',
+        ownerUid: currentUser.uid,
+        memberUids: [currentUser.uid],
         createdAt: serverTimestamp()
       });
       $('tripTitle').value = '';
@@ -204,6 +264,102 @@
       $('newTripForm').classList.add('hidden');
     } catch (err) {
       alert('שמירת הטיול נכשלה: ' + err.code);
+    }
+  });
+
+  // ---------- Trip details ----------
+  function openTrip(id) {
+    currentTripId = id;
+    const t = trips.find(x => x.id === id);
+    if (!t) return;
+    $('dTitle').value = t.title || '';
+    $('dStart').value = t.startDate || '';
+    $('dEnd').value = t.endDate || '';
+    $('dTime').value = t.departureTime || '08:00';
+    $('dLocation').value = t.location || '';
+    $('detailStatus').textContent = '';
+    showView('trip');
+    renderTripDetail();
+  }
+
+  function renderTripDetail() {
+    const t = trips.find(x => x.id === currentTripId);
+    if (!t) { currentTripId = null; showView('list'); return; }
+
+    const isOwner = currentUser && t.ownerUid === currentUser.uid;
+    const confirmed = t.status === 'confirmed';
+
+    $('detailTitle').textContent = t.title;
+    $('detailBadge').textContent = confirmed ? 'מאושר' : 'טיוטה';
+    $('detailBadge').className = 'badge' + (confirmed ? ' ok' : '');
+
+    // Only the owner can edit, confirm, or delete. Others see read-only info.
+    const note = $('ownerNote');
+    note.classList.toggle('hidden', isOwner);
+    note.textContent = 'אתה חבר בטיול הזה. רק הבעלים יכול לערוך אותו.';
+
+    for (const id of ['dTitle', 'dStart', 'dEnd', 'dTime', 'dLocation']) $(id).disabled = !isOwner;
+    $('saveBtn').classList.toggle('hidden', !isOwner);
+    $('confirmBtn').classList.toggle('hidden', !isOwner);
+    $('deleteBtn').closest('.section').classList.toggle('hidden', !isOwner);
+
+    $('confirmBtn').textContent = confirmed ? 'בטל אישור' : 'אשר את הטיול';
+    $('confirmBtn').className = confirmed ? 'secondary' : 'ok';
+    $('confirmBtn').style.width = '100%';
+    $('confirmNote').textContent = confirmed
+      ? 'הטיול מאושר. ביטול האישור יחזיר אותו לטיוטה.'
+      : 'אישור מסמן שהתוכנית סופית. אפשר לבטל בכל רגע.';
+  }
+
+  $('backBtn').addEventListener('click', () => {
+    currentTripId = null;
+    showView('list');
+  });
+
+  $('tripForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const t = trips.find(x => x.id === currentTripId);
+    if (!t || !currentUser || t.ownerUid !== currentUser.uid) return;
+    const startDate = $('dStart').value;
+    const endDate = $('dEnd').value;
+    if (endDate < startDate) { alert('תאריך הסיום חייב להיות אחרי תאריך ההתחלה'); return; }
+    try {
+      await updateDoc(doc(db, 'trips', t.id), {
+        title: $('dTitle').value.trim(),
+        startDate,
+        endDate,
+        departureTime: $('dTime').value || '08:00',
+        location: $('dLocation').value.trim(),
+        updatedAt: serverTimestamp()
+      });
+      $('detailStatus').textContent = 'השינויים נשמרו';
+    } catch (err) {
+      $('detailStatus').textContent = 'השמירה נכשלה: ' + err.code;
+    }
+  });
+
+  $('confirmBtn').addEventListener('click', async () => {
+    const t = trips.find(x => x.id === currentTripId);
+    if (!t || !currentUser || t.ownerUid !== currentUser.uid) return;
+    const next = t.status === 'confirmed' ? 'draft' : 'confirmed';
+    try {
+      await updateDoc(doc(db, 'trips', t.id), { status: next, updatedAt: serverTimestamp() });
+      $('detailStatus').textContent = next === 'confirmed' ? 'הטיול אושר' : 'האישור בוטל';
+    } catch (err) {
+      $('detailStatus').textContent = 'העדכון נכשל: ' + err.code;
+    }
+  });
+
+  $('deleteBtn').addEventListener('click', async () => {
+    const t = trips.find(x => x.id === currentTripId);
+    if (!t || !currentUser || t.ownerUid !== currentUser.uid) return;
+    if (!confirm('למחוק את "' + t.title + '" לצמיתות?')) return;
+    try {
+      await deleteDoc(doc(db, 'trips', t.id));
+      currentTripId = null;
+      showView('list');
+    } catch (err) {
+      $('detailStatus').textContent = 'המחיקה נכשלה: ' + err.code;
     }
   });
 </script>
