@@ -38,7 +38,7 @@
 
   <section id="loginView" class="hidden" style="text-align:center;padding-top:40px">
     <p>כדי ליצור ולנהל טיולים, התחבר עם חשבון Google.</p>
-    <button class="primary" id="signInBtn">התחבר עם Google</button>
+    <div id="gsiButton" style="display:flex;justify-content:center;margin:12px 0"></div>
     <p style="color:var(--muted);font-size:13px">אם נפתחת מתוך וואטסאפ, פתח את הקישור בספארי או בכרום.</p>
   </section>
 
@@ -59,14 +59,19 @@
   </section>
 </main>
 
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js";
   import {
-    getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut
+    getAuth, GoogleAuthProvider, signInWithCredential, onAuthStateChanged, signOut
   } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js";
   import {
     getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp
   } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js";
+
+  // Paste the Web client ID from Firebase Console → Authentication → Sign-in method → Google → Web SDK configuration
+  const GOOGLE_WEB_CLIENT_ID = "494703540488-6doup5uslfs4f6q5o332nntp6gt9ef1v.apps.googleusercontent.com";
 
   const firebaseConfig = {
     apiKey: "AIzaSyAPnZhIgAHf1InAmCwcucU1-YBuxukporg",
@@ -80,7 +85,6 @@
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
   const db = getFirestore(app);
-  const provider = new GoogleAuthProvider();
 
   const $ = id => document.getElementById(id);
   let unsubscribeTrips = null;
@@ -95,18 +99,32 @@
     $('status').classList.add('hidden');
   }
 
-  $('signInBtn').addEventListener('click', async () => {
+  // Google Identity Services gives us a Google ID token directly in the page,
+  // so the login does not depend on the firebaseapp.com domain or its storage.
+  async function handleCredential(response) {
     clearStatus();
     try {
-      await signInWithPopup(auth, provider);
+      const credential = GoogleAuthProvider.credential(response.credential);
+      await signInWithCredential(auth, credential);
     } catch (err) {
-      if (err.code === 'auth/popup-blocked') {
-        showStatus('הדפדפן חסם את חלון ההתחברות. אפשר חלונות קופצים ונסה שוב.');
-      } else if (err.code !== 'auth/cancelled-popup-request' && err.code !== 'auth/popup-closed-by-user') {
-        showStatus('ההתחברות נכשלה: ' + err.code);
-      }
+      showStatus('ההתחברות נכשלה: ' + err.code);
     }
-  });
+  }
+
+  function initGoogleButton() {
+    if (!window.google || !window.google.accounts) {
+      setTimeout(initGoogleButton, 200);
+      return;
+    }
+    google.accounts.id.initialize({
+      client_id: GOOGLE_WEB_CLIENT_ID,
+      callback: handleCredential
+    });
+    google.accounts.id.renderButton($('gsiButton'), {
+      theme: 'outline', size: 'large', text: 'signin_with', locale: 'he'
+    });
+  }
+  initGoogleButton();
 
   $('signOutBtn').addEventListener('click', () => signOut(auth));
 
