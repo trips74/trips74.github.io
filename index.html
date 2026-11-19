@@ -16,6 +16,7 @@
   .primary{background:var(--clay);color:#fff;width:100%}
   .ghost{background:transparent;color:var(--paper);border:1px solid rgba(244,247,242,.5)}
   .secondary{background:var(--line);color:var(--ink)}
+  .selected{background:var(--olive-dk);color:#fff}
   .danger{background:var(--danger);color:#fff;width:100%}
   .ok{background:var(--ok);color:#fff;width:100%}
   .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;margin:10px 0}
@@ -34,6 +35,7 @@
   .back{background:transparent;color:var(--clay);padding:6px 0;margin-bottom:8px}
   .section{margin-top:16px;border-top:1px solid var(--line);padding-top:12px}
   .note{color:var(--muted);font-size:13px;margin:6px 0}
+  .tpl{display:block;width:100%;text-align:start;background:#fff;color:var(--ink);border:1px solid var(--line);margin:6px 0}
 </style>
 </head>
 <body>
@@ -59,11 +61,23 @@
     <button class="primary" id="newTripBtn">טיול חדש</button>
 
     <form id="newTripForm" class="card hidden">
+      <div class="row">
+        <button type="button" class="secondary" id="srcBlank">מאפס</button>
+        <button type="button" class="secondary" id="srcTpl">מתבנית</button>
+      </div>
+
+      <div id="tplBox" class="hidden section">
+        <input id="tplSearch" placeholder="חיפוש תבנית לפי שם או אזור">
+        <div id="tplList"></div>
+        <p class="note" id="tplSummary"></p>
+        <p class="note">חיפוש ברשת יתווסף בשלב הבא, דרך שרת מתווך.</p>
+      </div>
+
       <label>שם הטיול<input id="tripTitle" required maxlength="80"></label>
       <label>תאריך התחלה<input id="startDate" type="date" required></label>
       <label>תאריך סיום<input id="endDate" type="date" required></label>
       <div class="row">
-        <button class="primary" type="submit">שמור</button>
+        <button class="primary" type="submit">צור טיול</button>
         <button type="button" class="secondary" id="cancelBtn">ביטול</button>
       </div>
     </form>
@@ -92,6 +106,12 @@
       </div>
     </form>
 
+    <div id="daysSection" class="section hidden">
+      <h3 style="margin:0 0 6px">מסלול</h3>
+      <div id="daysList"></div>
+      <p class="note" id="gearNote"></p>
+    </div>
+
     <div class="section">
       <button class="ok" id="confirmBtn">אשר את הטיול</button>
       <p class="note" id="confirmNote"></p>
@@ -114,7 +134,7 @@
   } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js";
   import {
     getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp,
-    doc, updateDoc, deleteDoc
+    doc, updateDoc, deleteDoc, getDocs
   } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js";
 
   const GOOGLE_WEB_CLIENT_ID = "494703540488-6doup5uslfs4f6q5o332nntp6gt9ef1v.apps.googleusercontent.com";
@@ -135,8 +155,21 @@
   const $ = id => document.getElementById(id);
   let unsubscribeTrips = null;
   let trips = [];
+  let templates = [];
   let currentTripId = null;
   let currentUser = null;
+  let createMode = 'blank';
+  let selectedTplId = null;
+
+  // ---------- Helpers ----------
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+
+  // Adds days to a yyyy-mm-dd string using local calendar math (avoids timezone shifts)
+  function addDays(dateStr, n) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dt = new Date(y, m - 1, d + n);
+    return dt.getFullYear() + '-' + pad(dt.getMonth() + 1) + '-' + pad(dt.getDate());
+  }
 
   function showStatus(msg) {
     const s = $('status');
@@ -225,20 +258,119 @@
       card.className = 'card clickable';
       const title = document.createElement('strong');
       title.textContent = t.title;
-      const dates = document.createElement('small');
-      dates.textContent = `${t.startDate} — ${t.endDate}`;
       const badge = document.createElement('span');
       badge.className = 'badge' + (t.status === 'confirmed' ? ' ok' : '');
       badge.style.marginInlineStart = '8px';
       badge.textContent = t.status === 'confirmed' ? 'מאושר' : 'טיוטה';
+      const dates = document.createElement('small');
+      dates.textContent = `${t.startDate} — ${t.endDate}`;
       card.append(title, badge, document.createElement('br'), dates);
       card.addEventListener('click', () => openTrip(t.id));
       list.appendChild(card);
     }
   }
 
-  $('newTripBtn').addEventListener('click', () => $('newTripForm').classList.remove('hidden'));
-  $('cancelBtn').addEventListener('click', () => $('newTripForm').classList.add('hidden'));
+  // ---------- Create trip: blank or from template ----------
+  function resetCreateForm() {
+    createMode = 'blank';
+    selectedTplId = null;
+    $('tripTitle').value = '';
+    $('startDate').value = '';
+    $('endDate').value = '';
+    $('tplSearch').value = '';
+    $('tplBox').classList.add('hidden');
+    $('tplSummary').textContent = '';
+    $('newTripForm').classList.add('hidden');
+    highlightSource();
+  }
+
+  function highlightSource() {
+    $('srcBlank').classList.toggle('selected', createMode === 'blank');
+    $('srcTpl').classList.toggle('selected', createMode === 'template');
+  }
+
+  async function loadTemplates() {
+    try {
+      const q = query(collection(db, 'templates'), where('published', '==', true));
+      const snap = await getDocs(q);
+      templates = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderTemplates();
+    } catch (err) {
+      templates = [];
+      renderTemplates();
+      $('tplSummary').textContent = 'לא ניתן לטעון תבניות: ' + err.code;
+    }
+  }
+
+  function renderTemplates() {
+    const term = $('tplSearch').value.trim().toLowerCase();
+    const list = $('tplList');
+    list.innerHTML = '';
+    const matches = templates.filter(t =>
+      !term || (t.title || '').toLowerCase().includes(term) || (t.region || '').toLowerCase().includes(term)
+    );
+    if (!matches.length) {
+      const empty = document.createElement('div');
+      empty.className = 'note';
+      empty.textContent = templates.length ? 'אין תבנית שתואמת את החיפוש.' : 'אין עדיין תבניות מאושרות.';
+      list.appendChild(empty);
+      return;
+    }
+    for (const t of matches) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'tpl' + (t.id === selectedTplId ? ' selected' : '');
+      const days = (t.days || []).length;
+      btn.textContent = `${t.title} · ${t.region || ''} · ${days} ימים`;
+      btn.addEventListener('click', () => selectTemplate(t.id));
+      list.appendChild(btn);
+    }
+  }
+
+  function selectTemplate(id) {
+    selectedTplId = id;
+    const t = templates.find(x => x.id === id);
+    if (!t) return;
+    if (!$('tripTitle').value.trim()) $('tripTitle').value = t.title || '';
+    const totalKm = (t.days || []).reduce((s, d) => s + (Number(d.distanceKm) || 0), 0);
+    $('tplSummary').textContent =
+      `${(t.days || []).length} ימים · ${totalKm.toFixed(1)} ק״מ · ${t.region || ''}`;
+    if ($('startDate').value && (t.days || []).length) {
+      $('endDate').value = addDays($('startDate').value, t.days.length - 1);
+    }
+    renderTemplates();
+  }
+
+  $('newTripBtn').addEventListener('click', () => {
+    $('newTripForm').classList.remove('hidden');
+    highlightSource();
+  });
+
+  $('srcBlank').addEventListener('click', () => {
+    createMode = 'blank';
+    selectedTplId = null;
+    $('tplBox').classList.add('hidden');
+    $('tplSummary').textContent = '';
+    highlightSource();
+  });
+
+  $('srcTpl').addEventListener('click', () => {
+    createMode = 'template';
+    $('tplBox').classList.remove('hidden');
+    highlightSource();
+    loadTemplates();
+  });
+
+  $('tplSearch').addEventListener('input', renderTemplates);
+
+  $('startDate').addEventListener('change', () => {
+    const t = templates.find(x => x.id === selectedTplId);
+    if (t && $('startDate').value && (t.days || []).length) {
+      $('endDate').value = addDays($('startDate').value, t.days.length - 1);
+    }
+  });
+
+  $('cancelBtn').addEventListener('click', resetCreateForm);
 
   $('newTripForm').addEventListener('submit', async e => {
     e.preventDefault();
@@ -246,22 +378,44 @@
     const startDate = $('startDate').value;
     const endDate = $('endDate').value;
     if (endDate < startDate) { alert('תאריך הסיום חייב להיות אחרי תאריך ההתחלה'); return; }
+
+    const tpl = createMode === 'template' ? templates.find(x => x.id === selectedTplId) : null;
+    if (createMode === 'template' && !tpl) { alert('בחר תבנית מהרשימה, או עבור ל"מאפס"'); return; }
+
+    // Copy the template structure into the trip. Dates are recalculated from the chosen start date.
+    const days = tpl ? (tpl.days || []).map((d, i) => ({
+      n: d.n ?? i + 1,
+      from: d.from || '',
+      to: d.to || '',
+      distanceKm: Number(d.distanceKm) || 0,
+      ascentM: Number(d.ascentM) || 0,
+      descentM: Number(d.descentM) || 0,
+      story: d.story || '',
+      date: addDays(startDate, i)
+    })) : [];
+
+    const gear = tpl ? (tpl.gear || []).map(g => ({
+      title: g.title || '',
+      items: (g.items || []).map(item => ({ label: item, checked: false }))
+    })) : [];
+
     try {
       await addDoc(collection(db, 'trips'), {
         title: $('tripTitle').value.trim(),
         startDate,
         endDate,
         departureTime: '08:00',
-        location: '',
+        location: tpl ? (tpl.region || '') : '',
         status: 'draft',
+        origin: tpl ? 'template' : 'manual',
+        originRef: tpl ? tpl.id : null,
+        days,
+        gear,
         ownerUid: currentUser.uid,
         memberUids: [currentUser.uid],
         createdAt: serverTimestamp()
       });
-      $('tripTitle').value = '';
-      $('startDate').value = '';
-      $('endDate').value = '';
-      $('newTripForm').classList.add('hidden');
+      resetCreateForm();
     } catch (err) {
       alert('שמירת הטיול נכשלה: ' + err.code);
     }
@@ -293,7 +447,6 @@
     $('detailBadge').textContent = confirmed ? 'מאושר' : 'טיוטה';
     $('detailBadge').className = 'badge' + (confirmed ? ' ok' : '');
 
-    // Only the owner can edit, confirm, or delete. Others see read-only info.
     const note = $('ownerNote');
     note.classList.toggle('hidden', isOwner);
     note.textContent = 'אתה חבר בטיול הזה. רק הבעלים יכול לערוך אותו.';
@@ -309,6 +462,39 @@
     $('confirmNote').textContent = confirmed
       ? 'הטיול מאושר. ביטול האישור יחזיר אותו לטיוטה.'
       : 'אישור מסמן שהתוכנית סופית. אפשר לבטל בכל רגע.';
+
+    renderDays(t);
+  }
+
+  function renderDays(t) {
+    const section = $('daysSection');
+    const list = $('daysList');
+    list.innerHTML = '';
+    const days = t.days || [];
+    section.classList.toggle('hidden', !days.length && !(t.gear || []).length);
+    if (!days.length) {
+      $('gearNote').textContent = (t.gear || []).length
+        ? `נוספו ${t.gear.length} קטגוריות ציוד מהתבנית.` : '';
+      return;
+    }
+    for (const d of days) {
+      const card = document.createElement('div');
+      card.className = 'card';
+      const title = document.createElement('strong');
+      title.textContent = `יום ${d.n}: ${d.from} ← ${d.to}`;
+      const meta = document.createElement('small');
+      meta.textContent = `${d.date} · ${d.distanceKm} ק״מ · עלייה ${d.ascentM} מ׳ · ירידה ${d.descentM} מ׳`;
+      card.append(title, document.createElement('br'), meta);
+      if (d.story) {
+        const story = document.createElement('p');
+        story.className = 'note';
+        story.textContent = d.story;
+        card.appendChild(story);
+      }
+      list.appendChild(card);
+    }
+    $('gearNote').textContent = (t.gear || []).length
+      ? `נוספו ${t.gear.length} קטגוריות ציוד מהתבנית.` : '';
   }
 
   $('backBtn').addEventListener('click', () => {
@@ -323,6 +509,10 @@
     const startDate = $('dStart').value;
     const endDate = $('dEnd').value;
     if (endDate < startDate) { alert('תאריך הסיום חייב להיות אחרי תאריך ההתחלה'); return; }
+
+    // If the start date moved, keep the day dates in sync with it.
+    const days = (t.days || []).map((d, i) => ({ ...d, date: addDays(startDate, i) }));
+
     try {
       await updateDoc(doc(db, 'trips', t.id), {
         title: $('dTitle').value.trim(),
@@ -330,6 +520,7 @@
         endDate,
         departureTime: $('dTime').value || '08:00',
         location: $('dLocation').value.trim(),
+        days,
         updatedAt: serverTimestamp()
       });
       $('detailStatus').textContent = 'השינויים נשמרו';
