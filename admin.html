@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ניהול תבניות</title>
+<style>
+  :root{--ink:#1F2E2E;--paper:#F4F7F2;--olive-dk:#0F3D3E;--clay:#C1622D;--line:#D7E0DB;--muted:#6C8481;--ok:#2E7D4F;--danger:#B23B2E;}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Heebo,sans-serif;background:var(--paper);color:var(--ink);min-height:100vh}
+  header{background:var(--olive-dk);color:var(--paper);padding:20px}
+  header h1{margin:0;font-size:22px}
+  main{padding:16px;max-width:680px;margin:auto}
+  button{font:inherit;border:0;border-radius:10px;padding:10px 14px;cursor:pointer}
+  .primary{background:var(--clay);color:#fff}
+  .secondary{background:var(--line);color:var(--ink)}
+  .danger{background:var(--danger);color:#fff}
+  .ok{background:var(--ok);color:#fff}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;margin:10px 0}
+  textarea{width:100%;min-height:200px;padding:10px;border:1px solid var(--line);border-radius:8px;font:13px monospace;direction:ltr;text-align:left}
+  .hidden{display:none !important}
+  .note{color:var(--muted);font-size:13px}
+  .msg{padding:10px;border-radius:8px;margin:10px 0;background:#fff;border:1px solid var(--line)}
+  .msg.error{border-color:var(--danger);color:var(--danger)}
+  .msg.good{border-color:var(--ok);color:var(--ok)}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .grow{flex:1}
+</style>
+</head>
+<body>
+<header><h1>ניהול תבניות</h1></header>
+
+<main>
+  <section id="loginView" class="hidden" style="text-align:center;padding-top:30px">
+    <p>עמוד ניהול. התחבר עם חשבון הניהול.</p>
+    <div id="gsiButton" style="display:flex;justify-content:center"></div>
+  </section>
+
+  <section id="noAccessView" class="hidden card" style="text-align:center">
+    <p>אין לך הרשאת ניהול עדיין.</p>
+    <p class="note">העתק את המזהה הזה והוסף אותו כמסמך ב-Firestore, באוסף admins:</p>
+    <code id="uidValue" style="direction:ltr;display:block;word-break:break-all;margin:8px 0"></code>
+    <button class="secondary" id="signOutNoAccess">התנתק</button>
+  </section>
+
+  <section id="adminView" class="hidden">
+    <div class="row">
+      <span id="whoami" class="note grow"></span>
+      <button class="secondary" id="signOutBtn">התנתק</button>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">טעינת תבנית</h3>
+      <p class="note">בחר קובץ JSON של תבנית, או הדבק את התוכן בתיבה.</p>
+      <input type="file" id="fileInput" accept=".json,application/json">
+      <textarea id="jsonText" placeholder="{ &quot;title&quot;: &quot;...&quot;, ... }"></textarea>
+      <div class="row" style="margin-top:8px">
+        <button class="secondary" id="checkBtn">בדוק</button>
+        <button class="primary" id="saveBtn">שמור תבנית</button>
+      </div>
+      <div id="preview" class="note"></div>
+    </div>
+
+    <div id="msg" class="msg hidden"></div>
+
+    <h3>תבניות קיימות</h3>
+    <div id="templateList"></div>
+  </section>
+</main>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js";
+  import {
+    getAuth, GoogleAuthProvider, signInWithCredential, onAuthStateChanged, signOut
+  } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js";
+  import {
+    getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, getDocs, serverTimestamp
+  } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js";
+
+  const GOOGLE_WEB_CLIENT_ID = "494703540488-6doup5uslfs4f6q5o332nntp6gt9ef1v.apps.googleusercontent.com";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyAPnZhIgAHf1InAmCwcucU1-YBuxukporg",
+    authDomain: "trips74-app.firebaseapp.com",
+    projectId: "trips74-app",
+    storageBucket: "trips74-app.firebasestorage.app",
+    messagingSenderId: "494703540488",
+    appId: "1:494703540488:web:81c6ae2ffb4c762071d4bd"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  const $ = id => document.getElementById(id);
+  let parsed = null;
+
+  function showMsg(text, kind) {
+    const m = $('msg');
+    m.textContent = text;
+    m.className = 'msg ' + (kind || '');
+  }
+
+  // ---------- Login ----------
+  async function handleCredential(response) {
+    try {
+      await signInWithCredential(auth, GoogleAuthProvider.credential(response.credential));
+    } catch (err) {
+      showMsg('ההתחברות נכשלה: ' + err.code, 'error');
+    }
+  }
+
+  function initGoogleButton() {
+    if (!window.google || !window.google.accounts) { setTimeout(initGoogleButton, 200); return; }
+    google.accounts.id.initialize({ client_id: GOOGLE_WEB_CLIENT_ID, callback: handleCredential });
+    google.accounts.id.renderButton($('gsiButton'), { theme: 'outline', size: 'large', text: 'signin_with', locale: 'he' });
+  }
+  initGoogleButton();
+
+  $('signOutBtn').addEventListener('click', () => signOut(auth));
+  $('signOutNoAccess').addEventListener('click', () => signOut(auth));
+
+  // Admin role is stored in Firestore (admins/{uid}), not in the code.
+  async function checkAdmin(uid) {
+    try {
+      const snap = await getDoc(doc(db, 'admins', uid));
+      return snap.exists();
+    } catch (err) {
+      return false;
+    }
+  }
+
+  onAuthStateChanged(auth, async user => {
+    $('loginView').classList.toggle('hidden', !!user);
+    $('adminView').classList.add('hidden');
+    $('noAccessView').classList.add('hidden');
+    if (!user) return;
+
+    if (await checkAdmin(user.uid)) {
+      $('whoami').textContent = 'מחובר כמנהל';
+      $('adminView').classList.remove('hidden');
+      loadList();
+    } else {
+      $('uidValue').textContent = user.uid;
+      $('noAccessView').classList.remove('hidden');
+    }
+  });
+
+  // ---------- Validation ----------
+  function slugify(s) {
+    return s.trim().replace(/[\s\/]+/g, '-').slice(0, 60);
+  }
+
+  function validate(raw) {
+    const errors = [];
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return { errors: ['הקובץ חייב להיות אובייקט JSON'] };
+    if (typeof raw.title !== 'string' || !raw.title.trim()) errors.push('חסר title');
+    if (typeof raw.region !== 'string') errors.push('חסר region');
+    if (!Array.isArray(raw.days) || !raw.days.length) errors.push('days חייב להכיל לפחות יום אחד');
+
+    const days = (Array.isArray(raw.days) ? raw.days : []).map((d, i) => {
+      const where = `יום ${i + 1}`;
+      if (typeof d.from !== 'string' || !d.from) errors.push(where + ': חסר from');
+      if (typeof d.to !== 'string' || !d.to) errors.push(where + ': חסר to');
+      for (const k of ['distanceKm', 'ascentM', 'descentM']) {
+        if (typeof d[k] !== 'number' || d[k] < 0) errors.push(`${where}: ${k} חייב להיות מספר`);
+      }
+      return {
+        n: typeof d.n === 'number' ? d.n : i + 1,
+        from: d.from || '',
+        to: d.to || '',
+        distanceKm: Number(d.distanceKm) || 0,
+        ascentM: Number(d.ascentM) || 0,
+        descentM: Number(d.descentM) || 0,
+        story: typeof d.story === 'string' ? d.story : ''
+      };
+    });
+
+    const gear = (Array.isArray(raw.gear) ? raw.gear : []).map(g => ({
+      title: String(g.title || ''),
+      items: (Array.isArray(g.items) ? g.items : []).map(String)
+    }));
+
+    if (errors.length) return { errors };
+    return {
+      data: {
+        title: raw.title.trim(),
+        region: (raw.region || '').trim(),
+        published: raw.published === true,
+        days,
+        gear
+      },
+      id: typeof raw.id === 'string' && raw.id ? raw.id : slugify(raw.title)
+    };
+  }
+
+  // ---------- Load file or text ----------
+  $('fileInput').addEventListener('change', async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    $('jsonText').value = await file.text();
+    check();
+  });
+
+  function check() {
+    parsed = null;
+    $('preview').textContent = '';
+    let raw;
+    try {
+      raw = JSON.parse($('jsonText').value);
+    } catch (err) {
+      showMsg('ה-JSON לא תקין: ' + err.message, 'error');
+      return false;
+    }
+    const result = validate(raw);
+    if (result.errors) {
+      showMsg('יש בעיות בתבנית:\n' + result.errors.join('\n'), 'error');
+      return false;
+    }
+    parsed = result;
+    const km = result.data.days.reduce((s, d) => s + d.distanceKm, 0);
+    $('preview').textContent =
+      `${result.data.title} · ${result.data.region} · ${result.data.days.length} ימים · ${km.toFixed(1)} ק״מ · ` +
+      `${result.data.published ? 'מפורסמת' : 'לא מפורסמת'} · מזהה: ${result.id}`;
+    showMsg('התבנית תקינה ומוכנה לשמירה.', 'good');
+    return true;
+  }
+
+  $('checkBtn').addEventListener('click', check);
+
+  // ---------- Save ----------
+  $('saveBtn').addEventListener('click', async () => {
+    if (!check() || !parsed) return;
+    try {
+      await setDoc(doc(db, 'templates', parsed.id), { ...parsed.data, updatedAt: serverTimestamp() }, { merge: true });
+      showMsg(`התבנית "${parsed.data.title}" נשמרה.`, 'good');
+      loadList();
+    } catch (err) {
+      showMsg('השמירה נכשלה: ' + err.code, 'error');
+    }
+  });
+
+  // ---------- Existing templates ----------
+  async function loadList() {
+    const list = $('templateList');
+    list.innerHTML = '';
+    try {
+      const snap = await getDocs(collection(db, 'templates'));
+      if (snap.empty) { list.innerHTML = '<p class="note">אין עדיין תבניות.</p>'; return; }
+      snap.docs.forEach(d => renderRow(d.id, d.data(), list));
+    } catch (err) {
+      list.innerHTML = '<p class="note">שגיאה בטעינה: ' + err.code + '</p>';
+    }
+  }
+
+  function renderRow(id, t, list) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    const title = document.createElement('strong');
+    title.textContent = t.title || id;
+    const meta = document.createElement('div');
+    meta.className = 'note';
+    meta.textContent = `${t.region || ''} · ${(t.days || []).length} ימים · ${t.published ? 'מפורסמת' : 'לא מפורסמת'} · ${id}`;
+
+    const actions = document.createElement('div');
+    actions.className = 'row';
+    actions.style.marginTop = '8px';
+
+    const toggle = document.createElement('button');
+    toggle.className = t.published ? 'secondary' : 'ok';
+    toggle.textContent = t.published ? 'הסתר' : 'פרסם';
+    toggle.addEventListener('click', async () => {
+      try {
+        await updateDoc(doc(db, 'templates', id), { published: !t.published, updatedAt: serverTimestamp() });
+        loadList();
+      } catch (err) { showMsg('העדכון נכשל: ' + err.code, 'error'); }
+    });
+
+    const del = document.createElement('button');
+    del.className = 'danger';
+    del.textContent = 'מחק';
+    del.addEventListener('click', async () => {
+      if (!confirm(`למחוק את "${t.title || id}"? הטיולים שכבר נוצרו ממנה לא יושפעו.`)) return;
+      try {
+        await deleteDoc(doc(db, 'templates', id));
+        loadList();
+      } catch (err) { showMsg('המחיקה נכשלה: ' + err.code, 'error'); }
+    });
+
+    actions.append(toggle, del);
+    card.append(title, document.createElement('br'), meta, actions);
+    list.appendChild(card);
+  }
+</script>
+</body>
+</html>
