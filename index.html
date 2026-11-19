@@ -4,171 +4,726 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>הטיולים שלי</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700;900&family=Heebo:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  :root{--ink:#1F2E2E;--paper:#F4F7F2;--olive-dk:#0F3D3E;--clay:#C1622D;--line:#D7E0DB;--muted:#6C8481;--ok:#2E7D4F;--danger:#B23B2E;}
-  *{box-sizing:border-box}
-  body{margin:0;font-family:Heebo,sans-serif;background:var(--paper);color:var(--ink);min-height:100vh}
-  header{background:var(--olive-dk);color:var(--paper);padding:20px}
-  header h1{margin:0;font-size:24px}
-  main{padding:16px;max-width:560px;margin:auto}
-  button{font:inherit;border:0;border-radius:10px;padding:12px 16px;cursor:pointer}
-  button:disabled{opacity:.5;cursor:default}
-  .primary{background:var(--clay);color:#fff;width:100%}
-  .ghost{background:transparent;color:var(--paper);border:1px solid rgba(244,247,242,.5)}
-  .secondary{background:var(--line);color:var(--ink)}
-  .selected{background:var(--olive-dk);color:#fff}
-  .danger{background:var(--danger);color:#fff;width:100%}
-  .ok{background:var(--ok);color:#fff;width:100%}
-  .small{padding:8px 12px;font-size:14px}
-  .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;margin:10px 0}
-  .card.clickable{cursor:pointer}
-  .card small{color:var(--muted)}
-  label{display:block;font-size:14px;margin-top:8px}
-  input,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font:inherit;margin:6px 0 4px;background:#fff}
-  textarea{min-height:70px;resize:vertical}
-  input:disabled,textarea:disabled{background:var(--paper)}
+
+  :root{
+    --ink:#1F2E2E;
+    --paper:#F4F7F2;
+    --paper-2:#E6EFE9;
+    --olive:#155050;
+    --olive-dk:#0F3D3E;
+    --clay:#C1622D;
+    --clay-lt:#E9A574;
+    --dusk:#2CA6A4;
+    --line:#D7E0DB;
+    --today:#C1622D;
+    /* extra tokens for the training tab (same family as above) */
+    --card:#FFFFFF;
+    --olive-lt:#8FBBB0;
+    --clay-dk:#8A4013;
+    --muted:#6C8481;
+    --rest:#E6EFE9;
+    --gold:#B98A3D;
+    --danger:#B23B2E;
+    --shadow:0 6px 20px rgba(15,61,62,0.10);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Heebo',sans-serif;
+    min-height:100vh;
+    padding-bottom:90px;
+  }
+  h1,h2,h3,.disp{font-family:'Frank Ruhl Libre',serif;}
+
+  /* HEADER */
+  header{
+    background:linear-gradient(160deg,var(--olive-dk),var(--olive) 60%,var(--clay) 130%);
+    color:var(--paper);
+    padding:26px 20px 34px;
+    position:relative;
+    overflow:hidden;
+  }
+  header::after{
+    content:"";
+    position:absolute; inset:0;
+    background-image:
+      radial-gradient(circle at 85% 15%, rgba(244,247,242,0.12), transparent 40%),
+      repeating-linear-gradient(115deg, rgba(244,247,242,0.05) 0 2px, transparent 2px 18px);
+    pointer-events:none;
+  }
+  .eyebrow{
+    font-size:12px; letter-spacing:.14em; opacity:.8; font-weight:600;
+    text-transform:uppercase;
+  }
+  header h1{
+    font-size:34px; margin:6px 0 4px; font-weight:900; line-height:1.1;
+  }
+  .subline{font-size:14px; opacity:.9;}
+  .top-row{
+    display:flex; align-items:center; justify-content:center;
+    gap:8px; margin-top:14px; flex-wrap:wrap;
+  }
+  .today-pill{
+    display:inline-flex; align-items:center; gap:6px;
+    background:rgba(244,247,242,0.16);
+    border:1px solid rgba(244,247,242,0.35);
+    border-radius:999px;
+    padding:6px 14px;
+    font-size:13px;
+    backdrop-filter:blur(2px);
+  }
+  .today-pill b{font-family:'Frank Ruhl Libre',serif; font-size:14px;}
+  .weather-pill{
+    display:inline-flex; align-items:center; gap:6px;
+    background:rgba(244,247,242,0.16);
+    border:1px solid rgba(244,247,242,0.35);
+    border-radius:999px;
+    padding:6px 14px;
+    font-size:13px;
+    backdrop-filter:blur(2px);
+    transition:background .3s, border-color .3s;
+  }
+  .share-pill{text-decoration:none; color:inherit; cursor:pointer;}
+  .top-row .weather-pill, .top-row .share-pill{width:178px; justify-content:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; box-sizing:border-box;}
+  .weather-pill b{font-family:'Frank Ruhl Libre',serif; font-size:14px;}
+  .weather-pill.weather-cold{
+    background:linear-gradient(135deg, rgba(108,146,183,0.32), rgba(60,74,92,0.30));
+    border-color:rgba(163,196,224,0.55);
+  }
+  .weather-pill.weather-mild{
+    background:linear-gradient(135deg, rgba(140,176,120,0.32), rgba(74,90,60,0.30));
+    border-color:rgba(178,209,152,0.55);
+  }
+  .weather-pill.weather-warm{
+    background:linear-gradient(135deg, rgba(232,185,140,0.35), rgba(193,98,45,0.28));
+    border-color:rgba(232,185,140,0.6);
+  }
+  .weather-pill.weather-hot{
+    background:linear-gradient(135deg, rgba(214,110,66,0.4), rgba(150,54,38,0.32));
+    border-color:rgba(230,140,100,0.6);
+  }
+  .lodging-shortcut{
+    display:flex; align-items:center; justify-content:space-between;
+    background:rgba(20,20,15,0.22);
+    border:1px dashed rgba(244,247,242,0.45);
+    border-radius:12px;
+    padding:10px 14px;
+    margin-top:10px;
+    font-size:13px; font-weight:600;
+    color:var(--paper);
+    text-decoration:none;
+  }
+  .lodging-shortcut #lodgingShortcutStatus{color:var(--clay-lt); font-weight:700;}
+  .crew-photo{
+    position:absolute; top:20px; left:20px;
+    width:86px; height:86px; border-radius:50%;
+    border:3px solid rgba(244,247,242,0.85);
+    box-shadow:0 4px 16px rgba(0,0,0,0.38);
+    object-fit:cover; z-index:2;
+  }
+
+  /* NAV TABS */
+  nav{
+    position:sticky; top:0; z-index:20;
+    display:flex;
+    background:var(--paper);
+    border-bottom:1px solid var(--line);
+    box-shadow:0 2px 10px rgba(43,58,46,0.06);
+  }
+  nav button{
+    flex:1; padding:13px 2px; background:none; border:none;
+    font-family:'Heebo',sans-serif; font-size:12px; font-weight:600;
+    color:#6C8481; cursor:pointer; border-bottom:3px solid transparent;
+    transition:.15s; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  nav button.active{color:var(--olive-dk); border-bottom-color:var(--clay);}
+  nav button[data-view="training"]{
+    color:#fff; background:var(--dusk); border-radius:10px; margin:6px 3px; padding:8px 2px;
+    border-bottom:none;
+  }
+  nav button[data-view="training"].active{
+    background:var(--dusk); color:#fff; border-bottom:none; box-shadow:inset 0 0 0 2px rgba(255,255,255,0.6);
+  }
+
+  main{padding:18px 16px 8px; max-width:640px; margin:0 auto;}
+  .view{display:none;}
+  .view.active{display:block; animation:fade .25s ease;}
+  @keyframes fade{from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);}}
+
+  /* DAY CARDS */
+  .route-edit-btn{background:var(--olive); color:#fff; border:none; border-radius:999px; padding:7px 14px; font-weight:700; font-size:13px; cursor:pointer; white-space:nowrap; font-family:inherit; box-shadow:0 2px 8px rgba(15,61,62,.25);}
+  .route-edit-btn:active{opacity:.85;}
+  .day-card{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:16px;
+    margin-bottom:16px;
+    overflow:hidden;
+    position:relative;
+  }
+  .day-card.is-today{
+    border:3px solid var(--clay);
+    box-shadow:0 10px 28px rgba(193,98,45,0.28);
+    transform:scale(1.015);
+  }
+  .day-card.is-today .day-head{
+    background:linear-gradient(135deg, var(--clay-lt) 0%, var(--paper-2) 65%);
+  }
+  .day-card.is-today .day-title{
+    font-weight:900;
+    color:var(--olive-dk);
+  }
+  .day-card.is-today .day-num{
+    color:var(--clay);
+  }
+  .day-head{
+    display:flex; justify-content:space-between; align-items:flex-start;
+    padding:16px 16px 10px;
+    background:var(--paper-2);
+  }
+  .day-num{
+    font-size:11px; font-weight:700; letter-spacing:.08em;
+    color:var(--olive-dk); text-transform:uppercase;
+  }
+  .day-title{font-size:19px; font-weight:700; margin-top:2px;}
+  .day-date{font-size:12px; color:#5A7573; margin-top:2px;}
+  .today-badge{
+    background:var(--clay); color:#fff; font-size:12.5px; font-weight:900;
+    padding:6px 14px; border-radius:999px; white-space:nowrap;
+    letter-spacing:.02em;
+    box-shadow:0 3px 10px rgba(193,98,45,0.45);
+    animation:pulseBadge 2s ease-in-out infinite;
+  }
+  @keyframes pulseBadge{
+    0%,100%{ box-shadow:0 3px 10px rgba(193,98,45,0.45); }
+    50%{ box-shadow:0 3px 16px rgba(193,98,45,0.75); }
+  }
+  .stats-row{
+    display:flex; gap:0; padding:12px 16px; border-bottom:1px solid var(--line);
+  }
+  .stat{flex:1; text-align:center;}
+  .stat b{display:block; font-family:'Frank Ruhl Libre',serif; font-size:18px; color:var(--olive-dk);}
+  .stat span{font-size:10.5px; color:#6C8481;}
+  .day-body{padding:14px 16px 16px;}
+  .day-body p{font-size:14px; line-height:1.65; margin:0 0 12px; color:#22383A;}
+  .day-links{display:flex; gap:8px; flex-wrap:wrap;}
+  .pill-link{
+    display:inline-flex; align-items:center; gap:6px;
+    font-size:12.5px; font-weight:600;
+    padding:8px 13px; border-radius:10px;
+    text-decoration:none;
+    border:1px solid var(--line);
+    color:var(--olive-dk);
+    background:var(--paper);
+  }
+  .pill-link.gmaps{background:var(--dusk); color:#fff; border-color:var(--dusk);}
+  .pill-link.mapeak{background:var(--olive); color:#fff; border-color:var(--olive);}
+  button.pill-link{font-family:'Heebo',sans-serif; cursor:pointer;}
+  .pill-link.ics-btn{background:#5A4A8A; color:#fff; border-color:#5A4A8A;}
+
+  /* SECTION LABELS */
+  .sec-label{
+    font-size:12px; font-weight:700; color:var(--clay); text-transform:uppercase;
+    letter-spacing:.08em; margin:22px 0 10px 2px;
+  }
+  .sec-label:first-child{margin-top:2px;}
+
+  /* GEAR */
+  .gear-cat{
+    background:#fff; border:1px solid var(--line); border-radius:14px;
+    margin-bottom:12px; overflow:hidden;
+  }
+  .gear-cat summary{
+    padding:13px 16px; font-weight:700; font-size:14.5px; cursor:pointer;
+    display:flex; justify-content:space-between; align-items:center;
+    background:var(--paper-2); list-style:none;
+  }
+  .gear-cat summary::-webkit-details-marker{display:none;}
+  .gear-cat summary .count{font-size:11.5px; font-weight:500; color:#6C8481;}
+  .gear-cat[open] summary{border-bottom:1px solid var(--line);}
+  .gear-item{
+    display:flex; align-items:center; gap:10px;
+    padding:11px 16px; border-bottom:1px solid #F1EBD9; font-size:14px;
+  }
+  .gear-item:last-child{border-bottom:none;}
+  .gear-item input[type=checkbox]{
+    width:20px; height:20px; accent-color:var(--olive); flex-shrink:0;
+  }
+  .gear-item label.checked{text-decoration:line-through; color:#8FA6A4;}
+  .gear-progress{
+    font-size:12px; color:#6C8481; padding:0 2px 10px; text-align:left;
+  }
+
+  /* TRANSPORT */
+  .contact-card{
+    background:linear-gradient(145deg,#20211F,#2E2C28);
+    color:#F2EFE6; border-radius:18px; padding:22px 20px; text-align:center;
+    margin-bottom:16px;
+  }
+  .contact-card .badge{
+    display:inline-block; border:1px solid #8A835E; border-radius:999px;
+    font-size:10.5px; letter-spacing:.1em; padding:4px 12px; margin-bottom:10px; color:#C9BE8F;
+  }
+  .contact-card h2{font-size:22px; margin:0 0 4px;}
+  .contact-card .sub{font-size:12.5px; color:#B7B29A; margin-bottom:18px;}
+  .call-btn{
+    display:block; background:var(--clay); color:#fff; text-decoration:none;
+    font-weight:700; font-size:17px; padding:14px; border-radius:12px; margin-bottom:10px;
+    letter-spacing:.03em;
+  }
+  .call-btn.secondary{background:transparent; border:1px solid #5A5744; color:#F2EFE6;}
+  .info-box{
+    background:#fff; border:1px solid var(--line); border-radius:14px; padding:16px;
+    font-size:13.5px; line-height:1.7; color:#2E4645;
+  }
+  .contact-card-sm{position:relative; padding:18px 18px 16px; text-align:right;}
+  .contact-card-sm h2{font-size:17px;}
+  .contact-card-sm .call-btn{font-size:14px; padding:11px;}
+  .contact-remove{
+    position:absolute; top:12px; left:12px; width:26px; height:26px;
+    border-radius:50%; border:1px solid #5A5744; background:transparent;
+    color:#C9BE8F; font-size:13px; cursor:pointer; line-height:1;
+  }
+  .add-contact-btn{
+    display:block; width:100%; text-align:center; background:#fff;
+    border:1.5px dashed var(--line); color:var(--olive); font-weight:700;
+    font-size:14px; padding:13px; border-radius:14px; margin-top:6px; cursor:pointer;
+  }
+  .add-contact-form{
+    background:#fff; border:1px solid var(--line); border-radius:14px;
+    padding:16px; margin-top:6px;
+  }
+  .add-contact-form input{
+    width:100%; box-sizing:border-box; border:1px solid var(--line); border-radius:10px;
+    padding:11px 12px; font-size:14px; font-family:inherit; margin-bottom:8px; color:var(--ink);
+  }
+  .add-contact-form .row{display:flex; gap:8px;}
+  .add-contact-form .row button{
+    flex:1; border:none; border-radius:10px; padding:11px; font-weight:700; font-size:14px; cursor:pointer;
+  }
+  .add-contact-form .save-btn{background:var(--olive); color:#fff;}
+  .add-contact-form .cancel-btn{background:var(--paper-2); color:var(--ink);}
+
+  /* LINKS TAB */
+  .link-item{
+    display:flex; align-items:center; gap:12px;
+    background:#fff; border:1px solid var(--line); border-radius:14px;
+    padding:14px 16px; margin-bottom:10px; text-decoration:none; color:var(--ink);
+  }
+  .link-item .ico{
+    width:38px; height:38px; border-radius:10px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; font-size:17px;
+    background:var(--paper-2);
+  }
+  .link-item .txt b{display:block; font-size:14px;}
+  .link-item .txt span{font-size:12px; color:#6C8481;}
+
+  .before-list{background:#fff; border:1px solid var(--line); border-radius:14px; padding:6px 16px;}
+
+  /* LODGING */
+  .tbd-banner{
+    background:#FBEFDE; border:1px solid #E7CDA0; color:#8A5A1E;
+    border-radius:12px; padding:10px 14px; font-size:12.5px; line-height:1.6;
+    margin-bottom:16px;
+  }
+  .night-card{
+    background:#fff; border:1px solid var(--line); border-radius:16px;
+    margin-bottom:16px; overflow:hidden;
+  }
+  .night-head{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:14px 16px; background:var(--paper-2);
+  }
+  .night-head .nt{font-size:11px; font-weight:700; color:var(--olive-dk); text-transform:uppercase; letter-spacing:.06em;}
+  .night-head .nt-sub{font-size:12px; color:#5A7573; margin-top:2px;}
+  .status-tag{font-size:10.5px; font-weight:700; padding:4px 10px; border-radius:999px;}
+  .status-tag.tbd{background:#FBEFDE; color:#8A5A1E;}
+  .status-tag.confirmed{background:#DCEAD4; color:#3A6B2E;}
+  .night-body{padding:14px 16px;}
+  .field-row{margin-bottom:12px;}
+  .field-row:last-child{margin-bottom:0;}
+  .field-label{font-size:11px; color:#6C8481; font-weight:700; margin-bottom:5px; display:block;}
+  .field-editable{
+    display:block; width:100%; box-sizing:border-box;
+    border:1px solid var(--line); border-radius:10px; padding:10px 12px;
+    font-size:14px; font-family:'Heebo',sans-serif; background:var(--paper);
+    outline:none; color:var(--ink);
+  }
+  .field-editable::placeholder{color:#8FA6A4;}
+  .field-editable:focus{border-color:var(--clay); background:#fff;}
+  textarea.field-editable{resize:vertical; min-height:44px;}
+  .night-actions{display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;}
+  .saved-flash{font-size:11px; color:var(--olive); opacity:0; transition:opacity .3s;}
+  .saved-flash.show{opacity:1;}
+
+  /* SOS FAB + PANEL */
+  .sos-fab{
+    position:fixed; bottom:22px; left:16px; z-index:40;
+    width:56px; height:56px; border-radius:50%;
+    background:#B23B2E; color:#fff; border:none;
+    font-size:22px; box-shadow:0 6px 18px rgba(178,59,46,0.5);
+    cursor:pointer;
+  }
+  .sos-panel{
+    position:fixed; bottom:0; left:0; right:0; z-index:50;
+    background:#fff; border-radius:20px 20px 0 0;
+    box-shadow:0 -8px 30px rgba(0,0,0,0.25);
+    padding:18px 18px 26px;
+    transform:translateY(110%);
+    transition:transform .3s ease;
+    max-width:640px; margin:0 auto;
+  }
+  .sos-panel.open{transform:translateY(0);}
+  .sos-panel-head{
+    display:flex; justify-content:space-between; align-items:center;
+    font-family:'Frank Ruhl Libre',serif; font-size:19px; font-weight:700;
+    margin-bottom:12px; color:var(--ink);
+  }
+  .sos-close{
+    background:var(--paper-2); border:none; border-radius:50%;
+    width:30px; height:30px; font-size:15px; cursor:pointer; color:var(--ink);
+  }
+  .sos-item{
+    display:flex; align-items:baseline; gap:10px;
+    padding:12px 4px; border-bottom:1px solid var(--line);
+    text-decoration:none; color:var(--ink);
+  }
+  .sos-item:last-of-type{border-bottom:none;}
+  .sos-item b{font-family:'Frank Ruhl Libre',serif; font-size:20px; color:#B23B2E; min-width:56px;}
+  .sos-item span{font-size:13px; color:#2E4645;}
+  .sos-note{font-size:11.5px; color:#6C8481; margin-top:10px; line-height:1.6;}
+  .sos-overlay{
+    position:fixed; inset:0; background:rgba(20,18,14,0.4); z-index:45;
+    opacity:0; pointer-events:none; transition:opacity .3s;
+  }
+  .sos-overlay.open{opacity:1; pointer-events:auto;}
+
+  /* SUNSET WARNING BANNER (inside day card) */
+  .sunset-warning{
+    background:#3C2A22; color:#F3D9BE;
+    border-radius:12px; padding:12px 14px; margin-bottom:12px;
+    font-size:13px; line-height:1.6;
+    border:1px solid #6B4A34;
+  }
+  .sunset-warning b{color:#FFB37A;}
+
+  footer{text-align:center; font-size:11px; color:#8FA6A4; padding:22px 20px 10px;}
+
+
+  /* ===== offline bar, countdown hero, route story, mini map ===== */
+  .offline-bar{background:#3C2A22; color:#F3D9BE; font-size:12px; font-weight:600; text-align:center; padding:7px 12px; line-height:1.45;}
+  .countdown-hero{
+    display:inline-flex; align-items:center; gap:12px; margin-top:12px; position:relative; z-index:1;
+    background:rgba(255,255,255,.14); border:1px solid rgba(255,255,255,.42); border-radius:16px; padding:8px 18px;
+  }
+  .cd-cal-btn{display:block; margin:10px auto 0; background:#fff; color:var(--olive-dk); border:none; border-radius:999px; padding:9px 18px; font-size:13px; font-weight:800; font-family:'Heebo',sans-serif; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.18); position:relative; z-index:1;}
+  /* ===== header layout: countdown + weather first, then three equal action buttons ===== */
+  .hdr-count{display:flex; justify-content:center; margin-top:14px; position:relative; z-index:1;}
+  .hdr-count .countdown-hero{margin-top:0;}
+  .hdr-weather{display:flex; justify-content:center; margin-top:12px; position:relative; z-index:1;}
+  .hdr-weather .weather-pill{width:100%; max-width:340px; justify-content:center; box-sizing:border-box; font-size:15px; font-weight:700; padding:10px 16px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-decoration:none; color:inherit;}
+  .hdr-actions{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; max-width:400px; margin:12px auto 0; position:relative; z-index:1;}
+  .hdr-btn{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; min-height:60px; padding:8px 6px; border-radius:14px; background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.42); color:#fff; font-size:12.5px; font-weight:800; line-height:1.3; text-align:center; text-decoration:none; cursor:pointer; font-family:'Heebo',sans-serif; box-sizing:border-box; box-shadow:0 2px 8px rgba(0,0,0,.14);}
+  .hdr-btn .ico{font-size:20px; line-height:1;}
+  .hdr-btn:active{opacity:.85;}
+  .hdr-today{display:flex; justify-content:center; margin-top:10px; position:relative; z-index:1;}
+  .hdr-today .today-pill{margin-top:0; font-size:12.5px;}
+  .cd-big{font-family:'Frank Ruhl Libre',serif; font-size:46px; font-weight:900; line-height:1; color:#fff; text-shadow:0 2px 10px rgba(0,0,0,.28);}
+  .cd-meta{display:flex; flex-direction:column; line-height:1.3;}
+  .cd-meta b{font-size:17px; font-weight:900;}
+  .cd-meta span{font-size:12px; opacity:.92;}
+
+  header .subline{max-width:calc(100% - 104px);}
+  .stats-row{align-items:center; gap:6px;}
+  .stats-row .stat{min-width:0;}
+  .stats-row .stat b{font-size:16px;}
+  .mini-map{flex:none; width:92px; display:flex; flex-direction:column; align-items:center; gap:2px; text-decoration:none; color:var(--olive-dk); font-size:9.5px; font-weight:700;}
+  .mini-map svg{display:block; border-radius:12px; box-shadow:0 2px 8px rgba(15,61,62,.15);}
+
+  .story-intro{font-size:15.5px; font-weight:800; color:var(--olive-dk); margin:0 0 12px; line-height:1.45;}
+  .timeline{list-style:none; margin:0 0 14px; padding:0;}
+  .timeline li{position:relative; padding:0 28px 13px 0;}
+  .timeline li:before{content:""; position:absolute; right:8px; top:18px; bottom:0; width:2px; background:var(--line);}
+  .timeline li:last-child{padding-bottom:2px;}
+  .timeline li:last-child:before{display:none;}
+  .tl-dot{position:absolute; right:0; top:3px; width:18px; height:18px; border-radius:50%; background:var(--paper-2); border:3px solid var(--olive); box-sizing:border-box;}
+  .timeline li.warn .tl-dot{border-color:var(--clay); background:#FBEFDE;}
+  .timeline li.star .tl-dot{border-color:#C99A3E; background:#FFF4D6;}
+  .timeline li.water .tl-dot{border-color:var(--dusk); background:#E2F4F3;}
+  .tl-k{font-size:13px; font-weight:800; color:var(--olive-dk); letter-spacing:.2px;}
+  .timeline li.warn .tl-k{color:var(--clay);}
+  .timeline li.star .tl-k{color:#8A6A1E;}
+  .tl-t{font-size:13.5px; line-height:1.6; color:#22383A;}
+  .tl-t b{font-weight:800; color:#0F3D3E;}
+
+  /* ============================================================
+     TRAINING TAB (Trail Trainer) — all rules prefixed .tt- to avoid
+     any collision with the rest of the app. Uses the SAME color
+     tokens as the rest of the site (defined in :root above).
+     ============================================================ */
+  .tt-pillnav{display:flex; gap:8px; margin-bottom:16px;}
+  .tt-pillnav button{
+    flex:1; padding:10px 4px; border-radius:12px; border:1px solid var(--line);
+    background:var(--card); color:var(--muted); font-family:'Heebo',sans-serif;
+    font-size:13px; font-weight:600; cursor:pointer;
+  }
+  .tt-pillnav button.active{background:var(--olive); color:#fff; border-color:var(--olive);}
+  .tt-screen{display:none;}
+  .tt-screen.active{display:block;}
+  .tt-card{background:var(--card); margin:0 0 14px; padding:18px; border-radius:18px; box-shadow:var(--shadow); border:1px solid var(--line);}
+  .tt-card h2{font-size:18px; margin:0 0 12px; display:flex; align-items:center; gap:8px; font-family:'Frank Ruhl Libre',serif;}
+  .tt-card h2 small{font-size:12px; font-weight:400; color:var(--muted); margin-inline-start:auto;}
+  .tt-row{display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-bottom:1px solid var(--line); font-size:14.5px; cursor:pointer;}
+  .tt-row:last-child{border-bottom:none;}
+  .tt-row .tt-label{color:var(--muted); display:flex; gap:6px; align-items:center;}
+  .tt-row .tt-val{font-weight:600;}
+  .tt-progress-outer{height:14px; background:var(--paper-2); border-radius:50px; overflow:hidden; margin-top:6px;}
+  .tt-progress-inner{height:100%; background:linear-gradient(90deg,var(--olive),var(--clay)); border-radius:50px; transition:width .5s ease;}
+  .tt-metric{font-size:26px; font-weight:900; font-family:'Frank Ruhl Libre',serif; color:var(--olive-dk);}
+  .tt-metric-sub{font-size:12.5px; color:var(--muted); margin-top:2px;}
+  .tt-btn{background:var(--olive); color:#fff; padding:12px; text-align:center; border-radius:12px; font-size:15px; font-weight:600; margin-top:10px; cursor:pointer; border:none; width:100%;}
+  .tt-btn.tt-ghost{background:transparent; border:1px solid var(--line); color:var(--ink);}
+  .tt-chip{display:inline-block; padding:3px 10px; border-radius:999px; font-size:11.5px; font-weight:600;}
+  .tt-chip.tt-type-walk{background:#DCEDE8; color:var(--olive-dk);}
+  .tt-chip.tt-type-strength{background:#D9EDEC; color:var(--dusk);}
+  .tt-chip.tt-type-climb{background:var(--clay-lt); color:var(--clay-dk);}
+  .tt-chip.tt-type-rest{background:var(--rest); color:var(--muted);}
+  .tt-chip.tt-type-trail{background:#F0D9C2; color:var(--clay-dk);}
+  .tt-chip.tt-type-recovery{background:#DCEDE8; color:var(--olive-dk);}
+  .tt-chip.tt-type-simulation{background:var(--clay); color:#fff;}
+  .tt-chip.tt-type-taper{background:#EFE2C8; color:var(--gold);}
+  .tt-chip.tt-type-depart{background:var(--gold); color:#fff;}
+  .tt-chip.tt-type-bike{background:#DCEDE8; color:var(--olive-dk);}
+  .tt-chip.tt-type-swim{background:#D9EDEC; color:var(--dusk);}
+  .tt-chip.tt-type-run{background:#F0D9C2; color:var(--clay-dk);}
+  .tt-chip.tt-type-other{background:var(--rest); color:var(--muted);}
+  .tt-cal-nav{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;}
+  .tt-cal-nav .tt-cbtn{font-size:18px; background:var(--paper-2); border:none; width:34px; height:34px; border-radius:9px; cursor:pointer; color:var(--ink);}
+  .tt-cal-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:5px; text-align:center;}
+  .tt-cal-dow{font-size:11px; color:var(--muted); padding-bottom:4px;}
+  .tt-cal-day{aspect-ratio:1; border-radius:10px; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:12.5px; background:var(--paper-2); cursor:pointer; position:relative; border:2px solid transparent;}
+  .tt-cal-day.tt-empty{background:transparent; cursor:default;}
+  .tt-cal-day .tt-dot{width:6px; height:6px; border-radius:50%; margin-top:2px;}
+  .tt-cal-day.tt-today{border-color:var(--clay);}
+  .tt-cal-day.tt-done{background:var(--olive); color:#fff;}
+  .tt-cal-day.tt-done .tt-dot{background:#fff;}
+  .tt-legend{display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; font-size:11px;}
+  .tt-legend span{display:flex; align-items:center; gap:5px;}
+  .tt-legend i{width:9px; height:9px; border-radius:50%; display:inline-block;}
+  .tt-overlay{position:fixed; inset:0; background:rgba(20,20,15,.5); display:none; align-items:flex-end; z-index:100;}
+  .tt-overlay.tt-open{display:flex;}
+  .tt-sheet{background:var(--card); width:100%; border-radius:20px 20px 0 0; padding:20px; max-height:85vh; overflow-y:auto; max-width:640px; margin:0 auto;}
+  .tt-sheet-handle{width:40px; height:4px; background:var(--line); border-radius:3px; margin:0 auto 14px;}
+  .tt-field{margin-top:12px;}
+  .tt-field label{font-size:12px; color:var(--muted); display:block; margin-bottom:5px;}
+  .tt-field input, .tt-field textarea{width:100%; padding:10px; border-radius:10px; border:1px solid var(--line); background:var(--paper-2); color:var(--ink); font-family:inherit; font-size:14px;}
+  .tt-chart-wrap{overflow-x:auto;}
+  .tt-chart-wrap svg text{font-family:'Heebo',sans-serif; fill:var(--ink);}
+  .tt-badge-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-top:6px;}
+  .tt-badge{background:var(--paper-2); border-radius:14px; padding:12px; text-align:center; opacity:.4;}
+  .tt-badge.tt-earned{opacity:1; background:linear-gradient(150deg,var(--clay-lt),var(--paper-2));}
+  .tt-badge .tt-ico{font-size:22px;}
+  .tt-badge .tt-txt{font-size:11px; margin-top:4px; font-weight:600;}
+  .tt-small-note{font-size:11.5px; color:var(--muted); line-height:1.6; margin-top:8px;}
+  .tt-toast{position:fixed; bottom:26px; inset-inline:0; display:flex; justify-content:center; z-index:200; pointer-events:none;}
+  .tt-toast span{background:var(--olive-dk); color:#fff; padding:10px 18px; border-radius:999px; font-size:13px; opacity:0; transform:translateY(10px); transition:.25s;}
+  .tt-toast span.tt-show{opacity:1; transform:translateY(0);}
+  .tt-countdown-row{display:flex; gap:8px; margin-bottom:14px;}
+  .tt-cd-box{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 6px; text-align:center; flex:1;}
+  .tt-cd-num{font-size:20px; font-weight:900; font-family:'Frank Ruhl Libre',serif; color:var(--olive-dk);}
+  .tt-cd-label{font-size:10.5px; color:var(--muted);}
+  /* ===== route edit sheet (was missing in the merged file) ===== */
+  .overlay{position:fixed; inset:0; background:rgba(20,20,15,.55); display:none; align-items:flex-end; justify-content:center; z-index:300;}
+  .overlay.open{display:flex;}
+  .overlay .sheet{background:#fff; width:100%; max-width:640px; border-radius:22px 22px 0 0; padding:20px 18px 26px; max-height:88vh; overflow-y:auto; -webkit-overflow-scrolling:touch;}
+  .overlay .sheet-handle{width:40px; height:4px; background:var(--line); border-radius:3px; margin:0 auto 12px;}
+  .overlay .sheet h2{font-size:18px; margin:0 0 4px; font-family:'Frank Ruhl Libre',serif;}
+  .overlay .field{margin-top:10px;}
+  .overlay .field label{font-size:12.5px; color:var(--muted); display:block; margin-bottom:4px; font-weight:600;}
+  .overlay .field input, .overlay .field textarea{width:100%; box-sizing:border-box; padding:10px 12px; border-radius:10px; border:1px solid var(--line); background:var(--paper-2); color:var(--ink); font-family:inherit; font-size:15px;}
+  .overlay .btn{display:block; width:100%; box-sizing:border-box; text-align:center; background:var(--olive); color:#fff; padding:13px; border-radius:14px; font-size:16px; font-weight:700; margin-top:12px; cursor:pointer; border:1px solid var(--olive);}
+  .overlay .sheet-actions{position:sticky; bottom:-26px; background:#fff; padding:8px 0 10px; margin:6px -18px -26px; padding-left:18px; padding-right:18px; border-top:1px solid var(--line);}
+  .toast{position:fixed; bottom:96px; left:0; right:0; display:flex; justify-content:center; z-index:350; pointer-events:none; padding:0 16px;}
+  .toast span{background:var(--olive-dk); color:#fff; padding:10px 18px; border-radius:999px; font-size:13px; font-weight:600; opacity:0; transform:translateY(10px); transition:.25s; text-align:center;}
+  .toast span.show{opacity:1; transform:translateY(0);}
+  /* ===== shared expenses (kupa) ===== */
+  .kp-form{background:#fff; border:1px solid var(--line); border-radius:14px; padding:12px; display:grid; gap:8px;}
+  .kp-form input{width:100%; box-sizing:border-box; border:1px solid var(--line); border-radius:10px; padding:10px 12px; font-size:15px; font-family:inherit; background:#fff; color:var(--ink);}
+  .kp-row{display:grid; grid-template-columns:1fr 1.4fr; gap:8px;}
+  .kp-form .btn{margin-top:4px;}
+  .kp-card{background:#fff; border:1px solid var(--line); border-radius:14px; padding:12px 14px; font-size:14px; line-height:1.7;}
+  .kp-item{background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px 12px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:flex-start; gap:8px; font-size:13.5px; line-height:1.55;}
+  .kp-item .kp-sub{color:#6C8481; font-size:12px;}
+  .kp-del{background:transparent; border:1px solid var(--line); border-radius:10px; padding:4px 8px; cursor:pointer; font-size:14px;}
+  .kp-empty{color:#6C8481; font-size:13px; padding:6px 2px;}
+  .overlay .btn.ghost{background:#fff; color:var(--ink); border:1px solid var(--line);}
+
+  /* ---- Supplement: components used by the trip app, built on the original palette ---- */
+  body{margin:0;font-family:'Heebo',sans-serif;background:var(--paper);color:var(--ink);min-height:100vh}
   .hidden{display:none !important}
-  .empty{color:var(--muted);text-align:center;padding:24px}
-  .row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
-  .row > *{flex:1}
-  .row > .fit{flex:0 0 auto}
-  #userBar{display:flex;justify-content:space-between;align-items:center;margin-top:10px}
-  .badge{display:inline-block;font-size:12px;padding:3px 10px;border-radius:999px;background:var(--line);color:var(--ink)}
-  .badge.ok{background:var(--ok);color:#fff;width:auto}
-  .back{background:transparent;color:var(--clay);padding:6px 0;margin-bottom:8px}
-  .section{margin-top:16px;border-top:1px solid var(--line);padding-top:12px}
-  .note{color:var(--muted);font-size:13px;margin:6px 0}
-  .tpl{display:block;width:100%;text-align:start;background:#fff;color:var(--ink);border:1px solid var(--line);margin:6px 0}
-  .draftbar{background:#FFF6E5;border:1px solid #E8C170;border-radius:10px;padding:10px;font-size:14px;margin-top:10px}
-  .gearcat{font-weight:600;margin-top:8px}
-  .check{display:flex;gap:8px;align-items:center;margin:4px 0;font-size:15px}
-  .check input{width:auto;margin:0}
-  .dayhead{display:flex;justify-content:space-between;align-items:center}
-  select{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font:inherit;margin:6px 0 4px;background:#fff}
-  .invite{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px;margin:6px 0}
-  .member{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)}
+  .trip-hero{background:linear-gradient(160deg,var(--olive-dk),var(--olive));color:#fff;padding:22px 16px 18px;border-radius:0 0 22px 22px;position:relative;overflow:hidden;box-shadow:var(--shadow)}
+  .trip-hero::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(255,255,255,.05) 0 2px,transparent 2px 14px);pointer-events:none}
+  .trip-hero > *{position:relative}
+  .trip-hero h1{font-family:'Frank Ruhl Libre',serif;font-size:26px;margin:4px 0 6px;line-height:1.25}
+  .hero-sub{opacity:.85;font-size:14px}
+  .hero-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .hero-btn{background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:999px;padding:8px 14px;font:inherit;font-size:14px;cursor:pointer}
+  .status-pill{display:inline-block;background:rgba(255,255,255,.18);border-radius:999px;padding:4px 12px;font-size:13px}
+  .status-pill.ok{background:var(--ok)}
+  .back-link{background:none;border:0;color:#fff;opacity:.85;font:inherit;padding:0;cursor:pointer;margin-bottom:6px}
+  .tabbar{display:flex;gap:6px;overflow-x:auto;padding:12px 16px;background:var(--paper-2);position:sticky;top:0;z-index:5}
+  .tab-btn{flex:0 0 auto;background:#fff;color:var(--ink);border:1px solid var(--line);border-radius:999px;padding:8px 14px;font:inherit;font-size:14px;cursor:pointer}
+  .tab-btn.active{background:var(--olive-dk);color:#fff;border-color:var(--olive-dk)}
+  .tab-btn.soon{opacity:.6}
+  .pane{padding:16px;max-width:680px;margin:0 auto}
+  .trip-card{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:14px 16px;margin:12px 0;cursor:pointer}
+  .trip-card .t{font-family:'Frank Ruhl Libre',serif;font-size:18px;font-weight:700}
+  .trip-card small{color:var(--muted)}
+  .btn-primary,.btn-ok,.btn-danger{color:#fff;border:0;border-radius:12px;padding:12px 16px;font:inherit;width:100%;cursor:pointer}
+  .btn-primary{background:var(--clay)}
+  .btn-ok{background:var(--ok)}
+  .btn-danger{background:var(--danger)}
+  .btn-soft{background:var(--paper-2);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:10px 14px;font:inherit;cursor:pointer}
+  .btn-small{padding:8px 12px;font-size:14px}
+  .btn-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .btn-row > *{flex:1}
+  .btn-row > .fit{flex:0 0 auto}
+  .field{display:block;font-size:14px;margin-top:10px}
+  .field input,.field textarea,.field select{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;font:inherit;margin-top:4px;background:#fff}
+  .field textarea{min-height:70px}
+  .field input:disabled{background:var(--paper)}
+  .edit-panel{background:var(--card);border:1px dashed var(--clay);border-radius:16px;padding:14px;margin:12px 0}
+  .info-box{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin:10px 0;color:var(--muted);font-size:14px}
+  .draftbar{background:#FFF6E5;border:1px solid #E8C170;border-radius:12px;padding:10px 12px;font-size:14px;margin:10px 0}
+  .msg-line{color:var(--muted);font-size:13px;margin:8px 0;min-height:18px;text-align:center}
+  .empty{text-align:center;color:var(--muted);padding:24px}
+  .day-card .day-links button.pill-link{border:0;font:inherit;cursor:pointer}
+  .today-badge{display:inline-block;background:var(--clay);color:#fff;border-radius:999px;padding:3px 10px;font-size:12px}
+  .day-edit{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .day-edit .field.full{grid-column:1 / -1}
+  .day-edit-actions{display:flex;gap:8px;margin-top:10px}
+  .day-edit-actions > *{flex:1}
+  .gear-group{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:12px 14px;margin:12px 0}
+  .gear-group h3{font-family:'Frank Ruhl Libre',serif;margin:0 0 6px;font-size:18px;color:var(--olive-dk)}
+  .gear-item{display:flex;gap:10px;align-items:center;padding:6px 0;border-bottom:1px dashed var(--line)}
+  .gear-item:last-child{border-bottom:0}
+  .gear-item input{width:18px;height:18px;margin:0}
+  .gear-item.checked label{text-decoration:line-through;color:var(--muted)}
+  .member-row,.invite-row{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--line)}
+  .tpl-btn{display:block;width:100%;text-align:start;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:6px 0;font:inherit;cursor:pointer}
+  .tpl-btn.selected{background:var(--olive-dk);color:#fff;border-color:var(--olive-dk)}
+  .seg{display:flex;gap:8px}
+  .seg > *{flex:1}
+  .seg .tab-btn{width:100%}
+
 </style>
 </head>
 <body>
-<header>
-  <h1>הטיולים שלי</h1>
-  <div id="userBar" class="hidden">
-    <span id="userName"></span>
-    <button class="ghost" id="signOutBtn">התנתק</button>
-  </div>
-</header>
+<div id="app">
 
-<main>
-  <p id="status" class="hidden" style="color:var(--danger);text-align:center"></p>
-
-  <section id="loginView" class="hidden" style="text-align:center;padding-top:40px">
-    <p>כדי ליצור ולנהל טיולים, התחבר עם חשבון Google.</p>
-    <div id="gsiButton" style="display:flex;justify-content:center;margin:12px 0"></div>
-    <p style="color:var(--muted);font-size:13px">אם נפתחת מתוך וואטסאפ, פתח את הקישור בספארי או בכרום.</p>
+  <!-- LOGIN -->
+  <section id="loginView" class="hidden">
+    <div class="trip-hero" style="text-align:center">
+      <h1>הטיולים שלי</h1>
+      <p class="hero-sub">תכנון טיולי הליכה, לבד או עם חברים</p>
+    </div>
+    <div class="pane" style="text-align:center">
+      <p>כדי ליצור ולנהל טיולים, התחבר עם חשבון Google.</p>
+      <div id="gsiButton" style="display:flex;justify-content:center;margin:12px 0"></div>
+      <p class="msg-line">אם נפתחת מתוך וואטסאפ, פתח את הקישור בספארי או בכרום.</p>
+    </div>
   </section>
 
-  <!-- LIST VIEW -->
+  <!-- LIST -->
   <section id="listView" class="hidden">
-    <button class="primary" id="newTripBtn">טיול חדש</button>
-
-    <form id="newTripForm" class="card hidden">
-      <div class="row">
-        <button type="button" class="secondary" id="srcBlank">מאפס</button>
-        <button type="button" class="secondary" id="srcTpl">מתבנית</button>
+    <div class="trip-hero">
+      <div class="hero-sub" id="userLine"></div>
+      <h1>הטיולים שלי</h1>
+      <div class="hero-actions">
+        <button class="hero-btn" id="newTripBtn">טיול חדש</button>
+        <button class="hero-btn" id="signOutBtn">התנתק</button>
       </div>
+    </div>
+    <div class="pane">
+      <p id="status" class="hidden msg-line" style="color:var(--danger)"></p>
 
-      <div id="tplBox" class="hidden section">
-        <input id="tplSearch" placeholder="חיפוש תבנית לפי שם או אזור">
-        <div id="tplList"></div>
-        <p class="note" id="tplSummary"></p>
-        <p class="note">חיפוש ברשת יתווסף בשלב הבא, דרך שרת מתווך.</p>
-      </div>
+      <form id="newTripForm" class="edit-panel hidden">
+        <div class="seg">
+          <button type="button" class="tab-btn" id="srcBlank">מאפס</button>
+          <button type="button" class="tab-btn" id="srcTpl">מתבנית</button>
+        </div>
 
-      <label>שם הטיול<input id="tripTitle" required maxlength="80"></label>
-      <label>תאריך התחלה<input id="startDate" type="date" required></label>
-      <label>תאריך סיום<input id="endDate" type="date" required></label>
-      <div class="row">
-        <button class="primary" type="submit">צור טיול</button>
-        <button type="button" class="secondary" id="cancelBtn">ביטול</button>
-      </div>
-    </form>
+        <div id="tplBox" class="hidden" style="margin-top:12px">
+          <input id="tplSearch" placeholder="חיפוש תבנית לפי שם או אזור" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;font:inherit">
+          <div id="tplList"></div>
+          <p class="msg-line" id="tplSummary"></p>
+        </div>
 
-    <div id="tripList"></div>
+        <label class="field">שם הטיול<input id="tripTitle" required maxlength="80"></label>
+        <label class="field">תאריך התחלה<input id="startDate" type="date" required></label>
+        <label class="field">תאריך סיום<input id="endDate" type="date" required></label>
+        <div class="btn-row">
+          <button class="btn-primary" type="submit">צור טיול</button>
+          <button type="button" class="btn-soft fit" id="cancelBtn">ביטול</button>
+        </div>
+      </form>
+
+      <div id="tripList"></div>
+    </div>
   </section>
 
-  <!-- TRIP DETAIL VIEW -->
+  <!-- TRIP -->
   <section id="tripView" class="hidden">
-    <button class="back" id="backBtn">← חזרה לרשימה</button>
-
-    <div class="dayhead">
-      <h2 id="detailTitle" style="margin:0;font-size:22px"></h2>
-      <span id="detailBadge" class="badge">טיוטה</span>
-    </div>
-    <div class="row" style="margin-top:6px">
-      <button class="secondary small fit" id="editToggleBtn">ערוך</button>
-    </div>
-    <p id="summaryLine" class="note"></p>
-    <p id="ownerNote" class="note hidden"></p>
-    <div id="draftBar" class="draftbar hidden">הטיול בטיוטה. עבור על המסלול והציוד, ואז אשר.</div>
-
-    <form id="tripForm" class="section">
-      <label>שם הטיול<input id="dTitle" required maxlength="80"></label>
-      <label>תאריך התחלה<input id="dStart" type="date" required></label>
-      <label>תאריך סיום<input id="dEnd" type="date" required></label>
-      <label>שעת יציאה<input id="dTime" type="time" value="08:00"></label>
-      <label>מיקום (לתחזית מזג אוויר)<input id="dLocation" maxlength="80" placeholder="למשל: צפת"></label>
-      <div class="row">
-        <button class="primary" type="submit" id="saveBtn">שמור פרטים</button>
+    <div class="trip-hero">
+      <button class="back-link" id="backBtn">← חזרה לרשימה</button>
+      <h1 id="detailTitle"></h1>
+      <div class="hero-sub" id="summaryLine"></div>
+      <div style="margin-top:10px"><span class="status-pill" id="detailBadge">טיוטה</span></div>
+      <div class="hero-actions">
+        <button class="hero-btn" id="editToggleBtn">ערוך</button>
+        <button class="hero-btn" id="inviteTabBtn">הזמן חברים</button>
+        <button class="hero-btn" id="icsBtn">📅 הוסף ליומן</button>
       </div>
-    </form>
+    </div>
 
-    <div class="section">
-      <div class="dayhead">
-        <h3 style="margin:0">מסלול</h3>
-        <span class="note" id="dayCount"></span>
+    <nav class="tabbar" id="tabbar"></nav>
+
+    <div class="pane">
+      <p id="ownerNote" class="info-box hidden"></p>
+      <div id="draftBar" class="draftbar hidden">הטיול בטיוטה. עבור על המסלול והציוד, ואז אשר.</div>
+
+      <div id="editPanel" class="edit-panel hidden">
+        <form id="tripForm">
+          <label class="field">שם הטיול<input id="dTitle" required maxlength="80"></label>
+          <label class="field">תאריך התחלה<input id="dStart" type="date" required></label>
+          <label class="field">תאריך סיום<input id="dEnd" type="date" required></label>
+          <label class="field">שעת יציאה<input id="dTime" type="time" value="08:00"></label>
+          <label class="field">מיקום (לתחזית מזג אוויר)<input id="dLocation" maxlength="80" placeholder="למשל: צפת"></label>
+          <div class="btn-row"><button class="btn-primary" type="submit">שמור פרטים</button></div>
+        </form>
+        <div class="btn-row"><button class="btn-soft" id="addDayBtn">+ הוסף יום</button></div>
+        <div class="btn-row"><button class="btn-ok" id="confirmBtn">אשר את הטיול</button></div>
+        <p class="msg-line" id="confirmNote"></p>
+        <div class="btn-row"><button class="btn-danger" id="deleteBtn">מחק טיול</button></div>
       </div>
-      <div id="daysList"></div>
-      <button class="secondary" id="addDayBtn" style="width:100%">הוסף יום</button>
-    </div>
 
-    <div class="section" id="gearSection">
-      <h3 style="margin:0 0 6px">ציוד</h3>
-      <div id="gearList"></div>
-    </div>
+      <div id="pane-route"></div>
+      <div id="pane-gear" class="hidden"></div>
+      <div id="pane-members" class="hidden"></div>
+      <div id="pane-soon" class="hidden"></div>
 
-    <div class="section" id="membersSection">
-      <h3 style="margin:0 0 6px">חברים</h3>
-      <div id="membersList"></div>
-
-      <div id="inviteBox" class="hidden">
-        <label>הרשאה לקישור החדש
-          <select id="inviteRole">
-            <option value="viewer">צופה</option>
-            <option value="editor">עורך</option>
-          </select>
-        </label>
-        <button class="primary" id="createInviteBtn" style="width:100%;margin-top:8px">צור קישור הזמנה</button>
-        <p class="note">הרשאת עורך תופעל בשלב הבא. כרגע כל המשתתפים צופים.</p>
-        <div id="inviteList"></div>
-      </div>
-      <p class="note" id="inviteStatus"></p>
+      <p id="detailStatus" class="msg-line"></p>
     </div>
-
-    <div class="section" id="confirmSection">
-      <button class="ok" id="confirmBtn">אשר את הטיול</button>
-      <p class="note" id="confirmNote"></p>
-    </div>
-
-    <div class="section" id="deleteSection">
-      <button class="danger" id="deleteBtn">מחק טיול</button>
-      <p class="note">מחיקה היא סופית, ורק הבעלים יכול למחוק.</p>
-    </div>
-    <p id="detailStatus" class="note" style="text-align:center"></p>
   </section>
-</main>
+
+</div>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js";
   import {
@@ -180,7 +735,6 @@
   } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js";
 
   const GOOGLE_WEB_CLIENT_ID = "494703540488-6doup5uslfs4f6q5o332nntp6gt9ef1v.apps.googleusercontent.com";
-
   const firebaseConfig = {
     apiKey: "AIzaSyAPnZhIgAHf1InAmCwcucU1-YBuxukporg",
     authDomain: "trips74-app.firebaseapp.com",
@@ -194,55 +748,71 @@
   const auth = getAuth(app);
   const db = getFirestore(app);
 
+  // Tabs. Items marked soon are shown in the same bar, so the layout never changes.
+  const TABS = [
+    { id: 'route', label: 'מסלול' },
+    { id: 'gear', label: 'ציוד' },
+    { id: 'members', label: 'חברים' },
+    { id: 'lodging', label: 'לינה', soon: true },
+    { id: 'transport', label: 'הסעה', soon: true },
+    { id: 'links', label: 'קישורים', soon: true },
+    { id: 'expenses', label: 'קופה', soon: true }
+  ];
+
   const $ = id => document.getElementById(id);
   let unsubscribeTrips = null;
   let trips = [];
   let templates = [];
   let currentTripId = null;
   let currentUser = null;
+  let currentTab = 'route';
+  let editMode = false;
   let createMode = 'blank';
   let selectedTplId = null;
-  let editMode = false;
-  let lastDaysKey = null;
+  let lastRouteKey = null;
   let lastGearKey = null;
+  let lastMembersKey = null;
 
   // ---------- Helpers ----------
   function pad(n) { return n < 10 ? '0' + n : '' + n; }
 
-  // Adds days to a yyyy-mm-dd string using local calendar math (avoids timezone shifts)
+  // Local calendar math, so dates never shift by a day
   function addDays(dateStr, n) {
     const [y, m, d] = dateStr.split('-').map(Number);
     const dt = new Date(y, m - 1, d + n);
     return dt.getFullYear() + '-' + pad(dt.getMonth() + 1) + '-' + pad(dt.getDate());
   }
 
-  function el(tag, className, text) {
+  function todayIso() {
+    const n = new Date();
+    return n.getFullYear() + '-' + pad(n.getMonth() + 1) + '-' + pad(n.getDate());
+  }
+
+  function el(tag, cls, text) {
     const e = document.createElement(tag);
-    if (className) e.className = className;
-    if (text !== undefined) e.textContent = text;
+    if (cls) e.className = cls;
+    if (text !== undefined && text !== null) e.textContent = text;
     return e;
   }
 
-  function field(labelText, input) {
-    const l = document.createElement('label');
-    l.textContent = labelText;
-    l.appendChild(input);
+  function btn(text, cls, onClick) {
+    const b = el('button', cls, text);
+    b.type = 'button';
+    b.addEventListener('click', onClick);
+    return b;
+  }
+
+  function field(labelText, input, full) {
+    const l = el('label', 'field' + (full ? ' full' : ''));
+    l.append(document.createTextNode(labelText), input);
     return l;
   }
 
-  function numberInput(value) {
+  function inputOf(type, value) {
     const i = document.createElement('input');
-    i.type = 'number';
-    i.min = '0';
-    i.step = 'any';
-    i.value = value ?? 0;
-    return i;
-  }
-
-  function textInput(value) {
-    const i = document.createElement('input');
-    i.type = 'text';
-    i.value = value ?? '';
+    i.type = type;
+    if (type === 'number') { i.min = '0'; i.step = 'any'; }
+    i.value = value ?? (type === 'number' ? 0 : '');
     return i;
   }
 
@@ -253,39 +823,43 @@
   }
   function clearStatus() { $('status').classList.add('hidden'); }
 
-  function showView(name) {
+  function showScreen(name) {
     $('listView').classList.toggle('hidden', name !== 'list');
     $('tripView').classList.toggle('hidden', name !== 'trip');
   }
 
-  function currentTrip() {
-    return trips.find(x => x.id === currentTripId);
+  function currentTrip() { return trips.find(x => x.id === currentTripId); }
+  function isOwnerOf(t) { return !!(t && currentUser && t.ownerUid === currentUser.uid); }
+
+  function summaryText(t) {
+    const days = t.days || [];
+    const km = days.reduce((s, d) => s + (Number(d.distanceKm) || 0), 0);
+    const up = days.reduce((s, d) => s + (Number(d.ascentM) || 0), 0);
+    const parts = [`${t.startDate} — ${t.endDate}`];
+    if (days.length) parts.push(`${days.length} ימים`, `${km.toFixed(1)} ק״מ`, `עלייה ${Math.round(up)} מ׳`);
+    if (t.location) parts.push(t.location);
+    return parts.join(' · ');
   }
 
-  function isOwnerOf(t) {
-    return !!(t && currentUser && t.ownerUid === currentUser.uid);
+  function mapsDirUrl(from, to) {
+    return 'https://www.google.com/maps/dir/?api=1&origin=' + encodeURIComponent(from) +
+      '&destination=' + encodeURIComponent(to) + '&travelmode=walking';
   }
 
-  // ---------- Login (Google Identity Services) ----------
+  // ---------- Login ----------
   async function handleCredential(response) {
     clearStatus();
     try {
-      const credential = GoogleAuthProvider.credential(response.credential);
-      await signInWithCredential(auth, credential);
+      await signInWithCredential(auth, GoogleAuthProvider.credential(response.credential));
     } catch (err) {
       showStatus('ההתחברות נכשלה: ' + err.code);
     }
   }
 
   function initGoogleButton() {
-    if (!window.google || !window.google.accounts) {
-      setTimeout(initGoogleButton, 200);
-      return;
-    }
+    if (!window.google || !window.google.accounts) { setTimeout(initGoogleButton, 200); return; }
     google.accounts.id.initialize({ client_id: GOOGLE_WEB_CLIENT_ID, callback: handleCredential });
-    google.accounts.id.renderButton($('gsiButton'), {
-      theme: 'outline', size: 'large', text: 'signin_with', locale: 'he'
-    });
+    google.accounts.id.renderButton($('gsiButton'), { theme: 'outline', size: 'large', text: 'signin_with', locale: 'he' });
   }
   initGoogleButton();
 
@@ -296,19 +870,17 @@
     currentUser = user;
     if (user) {
       $('loginView').classList.add('hidden');
-      $('userBar').classList.remove('hidden');
-      $('userName').textContent = user.displayName || user.email;
-      showView('list');
+      $('userLine').textContent = user.displayName || user.email || '';
+      showScreen('list');
       loadTrips(user.uid);
       tryJoin(user.uid);
     } else {
-      $('userBar').classList.add('hidden');
+      showScreen(null);
       $('listView').classList.add('hidden');
       $('tripView').classList.add('hidden');
       $('loginView').classList.remove('hidden');
       currentTripId = null;
-      lastDaysKey = null;
-      lastGearKey = null;
+      lastRouteKey = lastGearKey = lastMembersKey = null;
       if (unsubscribeTrips) { unsubscribeTrips(); unsubscribeTrips = null; }
     }
   });
@@ -332,24 +904,24 @@
   function renderTrips() {
     const list = $('tripList');
     list.innerHTML = '';
-    if (!trips.length) {
-      list.appendChild(el('div', 'empty', 'עדיין אין טיולים. צור את הראשון!'));
-      return;
-    }
+    if (!trips.length) { list.appendChild(el('div', 'empty', 'עדיין אין טיולים. צור את הראשון!')); return; }
     for (const t of trips) {
-      const card = el('div', 'card clickable');
-      const title = el('strong', '', t.title);
-      const badge = el('span', 'badge' + (t.status === 'confirmed' ? ' ok' : ''),
-        t.status === 'confirmed' ? 'מאושר' : 'טיוטה');
-      badge.style.marginInlineStart = '8px';
-      const dates = el('small', '', `${t.startDate} — ${t.endDate}`);
-      card.append(title, badge, document.createElement('br'), dates);
+      const card = el('div', 'trip-card');
+      const row = el('div', '');
+      row.append(el('span', 't', t.title), document.createTextNode(' '),
+        el('span', 'status-pill' + (t.status === 'confirmed' ? ' ok' : ''), t.status === 'confirmed' ? 'מאושר' : 'טיוטה'));
+      card.append(row, el('small', '', summaryText(t)));
       card.addEventListener('click', () => openTrip(t.id));
       list.appendChild(card);
     }
   }
 
   // ---------- Create trip: blank or from template ----------
+  function highlightSource() {
+    $('srcBlank').classList.toggle('active', createMode === 'blank');
+    $('srcTpl').classList.toggle('active', createMode === 'template');
+  }
+
   function resetCreateForm() {
     createMode = 'blank';
     selectedTplId = null;
@@ -363,15 +935,9 @@
     highlightSource();
   }
 
-  function highlightSource() {
-    $('srcBlank').classList.toggle('selected', createMode === 'blank');
-    $('srcTpl').classList.toggle('selected', createMode === 'template');
-  }
-
   async function loadTemplates() {
     try {
-      const q = query(collection(db, 'templates'), where('published', '==', true));
-      const snap = await getDocs(q);
+      const snap = await getDocs(query(collection(db, 'templates'), where('published', '==', true)));
       templates = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       renderTemplates();
     } catch (err) {
@@ -386,18 +952,15 @@
     const list = $('tplList');
     list.innerHTML = '';
     const matches = templates.filter(t =>
-      !term || (t.title || '').toLowerCase().includes(term) || (t.region || '').toLowerCase().includes(term)
-    );
+      !term || (t.title || '').toLowerCase().includes(term) || (t.region || '').toLowerCase().includes(term));
     if (!matches.length) {
-      list.appendChild(el('div', 'note', templates.length ? 'אין תבנית שתואמת את החיפוש.' : 'אין עדיין תבניות מאושרות.'));
+      list.appendChild(el('p', 'msg-line', templates.length ? 'אין תבנית שתואמת את החיפוש.' : 'אין עדיין תבניות מאושרות.'));
       return;
     }
     for (const t of matches) {
-      const btn = el('button', 'tpl' + (t.id === selectedTplId ? ' selected' : ''),
-        `${t.title} · ${t.region || ''} · ${(t.days || []).length} ימים`);
-      btn.type = 'button';
-      btn.addEventListener('click', () => selectTemplate(t.id));
-      list.appendChild(btn);
+      const b = btn(`${t.title} · ${t.region || ''} · ${(t.days || []).length} ימים`,
+        'tpl-btn' + (t.id === selectedTplId ? ' selected' : ''), () => selectTemplate(t.id));
+      list.appendChild(b);
     }
   }
 
@@ -406,8 +969,8 @@
     const t = templates.find(x => x.id === id);
     if (!t) return;
     if (!$('tripTitle').value.trim()) $('tripTitle').value = t.title || '';
-    const totalKm = (t.days || []).reduce((s, d) => s + (Number(d.distanceKm) || 0), 0);
-    $('tplSummary').textContent = `${(t.days || []).length} ימים · ${totalKm.toFixed(1)} ק״מ · ${t.region || ''}`;
+    const km = (t.days || []).reduce((s, d) => s + (Number(d.distanceKm) || 0), 0);
+    $('tplSummary').textContent = `${(t.days || []).length} ימים · ${km.toFixed(1)} ק״מ · ${t.region || ''}`;
     if ($('startDate').value && (t.days || []).length) {
       $('endDate').value = addDays($('startDate').value, t.days.length - 1);
     }
@@ -418,7 +981,6 @@
     $('newTripForm').classList.remove('hidden');
     highlightSource();
   });
-
   $('srcBlank').addEventListener('click', () => {
     createMode = 'blank';
     selectedTplId = null;
@@ -426,23 +988,19 @@
     $('tplSummary').textContent = '';
     highlightSource();
   });
-
   $('srcTpl').addEventListener('click', () => {
     createMode = 'template';
     $('tplBox').classList.remove('hidden');
     highlightSource();
     loadTemplates();
   });
-
   $('tplSearch').addEventListener('input', renderTemplates);
-
   $('startDate').addEventListener('change', () => {
     const t = templates.find(x => x.id === selectedTplId);
     if (t && $('startDate').value && (t.days || []).length) {
       $('endDate').value = addDays($('startDate').value, t.days.length - 1);
     }
   });
-
   $('cancelBtn').addEventListener('click', resetCreateForm);
 
   $('newTripForm').addEventListener('submit', async e => {
@@ -455,16 +1013,10 @@
     const tpl = createMode === 'template' ? templates.find(x => x.id === selectedTplId) : null;
     if (createMode === 'template' && !tpl) { alert('בחר תבנית מהרשימה, או עבור ל"מאפס"'); return; }
 
-    // Copy the template into the trip as a draft. Dates are calculated from the start date.
     const days = tpl ? (tpl.days || []).map((d, i) => ({
-      n: i + 1,
-      from: d.from || '',
-      to: d.to || '',
-      distanceKm: Number(d.distanceKm) || 0,
-      ascentM: Number(d.ascentM) || 0,
-      descentM: Number(d.descentM) || 0,
-      story: d.story || '',
-      date: addDays(startDate, i)
+      n: i + 1, from: d.from || '', to: d.to || '',
+      distanceKm: Number(d.distanceKm) || 0, ascentM: Number(d.ascentM) || 0, descentM: Number(d.descentM) || 0,
+      story: d.story || '', date: addDays(startDate, i)
     })) : [];
 
     const gear = tpl ? (tpl.gear || []).map(g => ({
@@ -474,18 +1026,10 @@
 
     try {
       await addDoc(collection(db, 'trips'), {
-        title: $('tripTitle').value.trim(),
-        startDate,
-        endDate,
-        departureTime: '08:00',
-        location: tpl ? (tpl.region || '') : '',
-        status: 'draft',
-        origin: tpl ? 'template' : 'manual',
-        originRef: tpl ? tpl.id : null,
-        days,
-        gear,
-        ownerUid: currentUser.uid,
-        memberUids: [currentUser.uid],
+        title: $('tripTitle').value.trim(), startDate, endDate,
+        departureTime: '08:00', location: tpl ? (tpl.region || '') : '',
+        status: 'draft', origin: tpl ? 'template' : 'manual', originRef: tpl ? tpl.id : null,
+        days, gear, ownerUid: currentUser.uid, memberUids: [currentUser.uid],
         createdAt: serverTimestamp()
       });
       resetCreateForm();
@@ -494,12 +1038,12 @@
     }
   });
 
-  // ---------- Trip details ----------
+  // ---------- Trip screen ----------
   function openTrip(id) {
     currentTripId = id;
-    lastDaysKey = null;
-    lastGearKey = null;
+    currentTab = 'route';
     editMode = false;
+    lastRouteKey = lastGearKey = lastMembersKey = null;
     const t = currentTrip();
     if (!t) return;
     $('dTitle').value = t.title || '';
@@ -508,124 +1052,173 @@
     $('dTime').value = t.departureTime || '08:00';
     $('dLocation').value = t.location || '';
     $('detailStatus').textContent = '';
-    $('inviteStatus').textContent = '';
-    showView('trip');
+    showScreen('trip');
     renderTripDetail();
-    if (isOwnerOf(t)) refreshInvites();
   }
 
-  function summaryText(t) {
-    const days = t.days || [];
-    const km = days.reduce((sum, d) => sum + (Number(d.distanceKm) || 0), 0);
-    const up = days.reduce((sum, d) => sum + (Number(d.ascentM) || 0), 0);
-    const parts = [`${t.startDate} — ${t.endDate}`];
-    if (days.length) parts.push(`${days.length} ימים`, `${km.toFixed(1)} ק״מ`, `עלייה ${Math.round(up)} מ׳`);
-    if (t.location) parts.push(t.location);
-    return parts.join(' · ');
-  }
+  $('backBtn').addEventListener('click', () => {
+    editMode = false;
+    currentTripId = null;
+    showScreen('list');
+  });
+
+  $('editToggleBtn').addEventListener('click', () => {
+    const t = currentTrip();
+    if (!isOwnerOf(t)) return;
+    editMode = !editMode;
+    lastRouteKey = null;
+    renderTripDetail();
+  });
+
+  $('inviteTabBtn').addEventListener('click', () => {
+    currentTab = 'members';
+    renderTripDetail();
+  });
 
   function renderTripDetail() {
     const t = currentTrip();
-    if (!t) { currentTripId = null; showView('list'); return; }
-
+    if (!t) { currentTripId = null; showScreen('list'); return; }
     const isOwner = isOwnerOf(t);
     const canEdit = isOwner && editMode;
     const confirmed = t.status === 'confirmed';
 
     $('detailTitle').textContent = t.title;
-    $('detailBadge').textContent = confirmed ? 'מאושר' : 'טיוטה';
-    $('detailBadge').className = 'badge' + (confirmed ? ' ok' : '');
-    $('draftBar').classList.toggle('hidden', confirmed || !isOwner);
     $('summaryLine').textContent = summaryText(t);
+    $('detailBadge').textContent = confirmed ? 'מאושר' : 'טיוטה';
+    $('detailBadge').className = 'status-pill' + (confirmed ? ' ok' : '');
+    $('draftBar').classList.toggle('hidden', confirmed || !isOwner);
 
     $('editToggleBtn').classList.toggle('hidden', !isOwner);
     $('editToggleBtn').textContent = editMode ? 'סיים עריכה' : 'ערוך';
+    $('inviteTabBtn').classList.toggle('hidden', !isOwner);
 
     const note = $('ownerNote');
     note.classList.toggle('hidden', isOwner);
     note.textContent = 'אתה חבר בטיול הזה. רק הבעלים יכול לערוך אותו.';
 
-    // View mode shows the trip as a guide. Edit mode shows the editors.
+    $('editPanel').classList.toggle('hidden', !canEdit);
     for (const id of ['dTitle', 'dStart', 'dEnd', 'dTime', 'dLocation']) $(id).disabled = !canEdit;
-    $('tripForm').classList.toggle('hidden', !canEdit);
-    $('addDayBtn').classList.toggle('hidden', !canEdit);
-    $('confirmSection').classList.toggle('hidden', !canEdit);
-    $('deleteSection').classList.toggle('hidden', !canEdit);
-
     $('confirmBtn').textContent = confirmed ? 'בטל אישור' : 'אשר את הטיול';
-    $('confirmBtn').className = confirmed ? 'secondary' : 'ok';
-    $('confirmBtn').style.width = '100%';
+    $('confirmBtn').className = confirmed ? 'btn-soft' : 'btn-ok';
     $('confirmNote').textContent = confirmed
       ? 'הטיול מאושר. ביטול האישור יחזיר אותו לטיוטה.'
       : 'אישור מסמן שהתוכנית סופית. אפשר לבטל בכל רגע.';
 
-    renderDays(t, canEdit);
-    renderGear(t, isOwner);
-    renderMembers(t, canEdit);
+    renderTabbar();
+    showPane(currentTab);
+    if (currentTab === 'route') renderRoute(t, canEdit);
+    if (currentTab === 'gear') renderGear(t, isOwner);
+    if (currentTab === 'members') { renderMembers(t, isOwner); if (isOwner) refreshInvites(); }
   }
 
-  // Rebuilds the day editor only when the data changed, so typing is not overwritten.
-  function renderDays(t, isOwner) {
-    const days = t.days || [];
-    const key = JSON.stringify(days) + '|' + isOwner;
-    $('dayCount').textContent = days.length ? `${days.length} ימים` : '';
-    if (key === lastDaysKey) return;
-    lastDaysKey = key;
+  function renderTabbar() {
+    const bar = $('tabbar');
+    bar.innerHTML = '';
+    for (const tab of TABS) {
+      const b = btn(tab.label, 'tab-btn' + (tab.id === currentTab ? ' active' : '') + (tab.soon ? ' soon' : ''), () => {
+        currentTab = tab.id;
+        renderTripDetail();
+      });
+      bar.appendChild(b);
+    }
+  }
 
-    const list = $('daysList');
-    list.innerHTML = '';
+  function showPane(tab) {
+    $('pane-route').classList.toggle('hidden', tab !== 'route');
+    $('pane-gear').classList.toggle('hidden', tab !== 'gear');
+    $('pane-members').classList.toggle('hidden', tab !== 'members');
+    const soon = TABS.find(x => x.id === tab && x.soon);
+    $('pane-soon').classList.toggle('hidden', !soon);
+    if (soon) {
+      const box = $('pane-soon');
+      box.innerHTML = '';
+      box.appendChild(el('div', 'info-box', `${soon.label}: בקרוב. החלק הזה ייבנה באותו עיצוב.`));
+    }
+  }
+
+  // ---------- Route (days) ----------
+  function renderRoute(t, canEdit) {
+    const days = t.days || [];
+    const key = JSON.stringify(days) + '|' + canEdit;
+    if (key === lastRouteKey) return;
+    lastRouteKey = key;
+
+    const pane = $('pane-route');
+    pane.innerHTML = '';
     if (!days.length) {
-      list.appendChild(el('div', 'note', isOwner ? 'אין עדיין ימים במסלול. הוסף יום למטה.' : 'אין עדיין ימים במסלול.'));
+      pane.appendChild(el('div', 'info-box', canEdit ? 'אין עדיין ימים במסלול. הוסף יום מלמעלה.' : 'אין עדיין ימים במסלול.'));
       return;
     }
+    const today = todayIso();
+    days.forEach((d, i) => pane.appendChild(canEdit ? dayEditCard(d, i, today) : dayViewCard(d, i, today)));
+  }
 
-    days.forEach((d, i) => {
-      const card = el('div', 'card');
-      const head = el('div', 'dayhead');
-      head.append(el('strong', '', `יום ${i + 1}`), el('small', '', d.date || ''));
-      card.appendChild(head);
+  function dayHead(d, i, today) {
+    const head = el('div', 'day-head');
+    const left = el('div');
+    left.append(el('div', 'day-num', `יום ${i + 1} · ${d.date || ''}`), el('div', 'day-title', `${d.from} ← ${d.to}`));
+    head.appendChild(left);
+    if (d.date === today) head.appendChild(el('div', 'today-badge', '📍 היום'));
+    return head;
+  }
 
-      if (!isOwner) {
-        card.appendChild(el('p', '', `${d.from} ← ${d.to}`));
-        card.appendChild(el('small', '', `${d.distanceKm} ק״מ · עלייה ${d.ascentM} מ׳ · ירידה ${d.descentM} מ׳`));
-        if (d.story) card.appendChild(el('p', 'note', d.story));
-        list.appendChild(card);
-        return;
-      }
+  function dayViewCard(d, i, today) {
+    const card = el('div', 'day-card' + (d.date === today ? ' is-today' : ''));
+    card.appendChild(dayHead(d, i, today));
 
-      const fromIn = textInput(d.from);
-      const toIn = textInput(d.to);
-      const distIn = numberInput(d.distanceKm);
-      const upIn = numberInput(d.ascentM);
-      const downIn = numberInput(d.descentM);
-      const storyIn = document.createElement('textarea');
-      storyIn.value = d.story || '';
+    const stats = el('div', 'stats-row');
+    stats.append(statEl(`${d.distanceKm}`, 'מרחק (ק״מ)'), statEl(`+${d.ascentM}`, 'עלייה'), statEl(`-${d.descentM}`, 'ירידה'));
+    card.appendChild(stats);
 
-      card.append(
-        field('מ־', fromIn),
-        field('עד', toIn),
-        field('מרחק (ק״מ)', distIn),
-        field('עלייה (מ׳)', upIn),
-        field('ירידה (מ׳)', downIn),
-        field('תיאור', storyIn)
-      );
+    const body = el('div', 'day-body');
+    if (d.story) body.appendChild(el('p', '', d.story));
+    const links = el('div', 'day-links');
+    const a = el('a', 'pill-link gmaps', '🧭 מסלול הליכה — Google Maps');
+    a.href = mapsDirUrl(d.from, d.to);
+    a.target = '_blank';
+    a.rel = 'noopener';
+    links.appendChild(a);
+    body.appendChild(links);
+    card.appendChild(body);
+    return card;
+  }
 
-      const actions = el('div', 'row');
-      const saveBtn = el('button', 'primary small', 'שמור יום');
-      saveBtn.addEventListener('click', () => saveDay(i, {
-        from: fromIn.value.trim(),
-        to: toIn.value.trim(),
-        distanceKm: Number(distIn.value) || 0,
-        ascentM: Number(upIn.value) || 0,
-        descentM: Number(downIn.value) || 0,
-        story: storyIn.value.trim()
-      }));
-      const delBtn = el('button', 'danger small fit', 'מחק יום');
-      delBtn.addEventListener('click', () => deleteDay(i));
-      actions.append(saveBtn, delBtn);
-      card.appendChild(actions);
-      list.appendChild(card);
-    });
+  function statEl(value, label) {
+    const s = el('div', 'stat');
+    s.append(el('b', '', value), el('span', '', label));
+    return s;
+  }
+
+  function dayEditCard(d, i, today) {
+    const card = el('div', 'day-card');
+    card.appendChild(dayHead(d, i, today));
+
+    const grid = el('div', 'day-edit');
+    const fromIn = inputOf('text', d.from);
+    const toIn = inputOf('text', d.to);
+    const distIn = inputOf('number', d.distanceKm);
+    const upIn = inputOf('number', d.ascentM);
+    const downIn = inputOf('number', d.descentM);
+    const storyIn = document.createElement('textarea');
+    storyIn.value = d.story || '';
+    grid.append(
+      field('מ־', fromIn), field('עד', toIn),
+      field('מרחק (ק״מ)', distIn), field('עלייה (מ׳)', upIn),
+      field('ירידה (מ׳)', downIn), field('תיאור', storyIn, true)
+    );
+    card.appendChild(grid);
+
+    const actions = el('div', 'day-edit-actions');
+    actions.append(
+      btn('שמור יום', 'btn-primary', () => saveDay(i, {
+        from: fromIn.value.trim(), to: toIn.value.trim(),
+        distanceKm: Number(distIn.value) || 0, ascentM: Number(upIn.value) || 0,
+        descentM: Number(downIn.value) || 0, story: storyIn.value.trim()
+      })),
+      btn('מחק יום', 'btn-danger', () => deleteDay(i))
+    );
+    card.appendChild(actions);
+    return card;
   }
 
   // Keeps day numbers and dates in order, and moves the end date to the last day.
@@ -633,15 +1226,15 @@
     return days.map((d, i) => ({ ...d, n: i + 1, date: addDays(startDate, i) }));
   }
 
-  async function persistDays(newDays, successMsg) {
+  async function persistDays(newDays, msg) {
     const t = currentTrip();
-    if (!t || !isOwnerOf(t)) return;
+    if (!isOwnerOf(t)) return;
     const days = normalizeDays(newDays, t.startDate);
     const update = { days, updatedAt: serverTimestamp() };
     if (days.length) update.endDate = days[days.length - 1].date;
     try {
       await updateDoc(doc(db, 'trips', t.id), update);
-      $('detailStatus').textContent = successMsg;
+      $('detailStatus').textContent = msg;
     } catch (err) {
       $('detailStatus').textContent = 'השמירה נכשלה: ' + err.code;
     }
@@ -660,97 +1253,164 @@
     const t = currentTrip();
     if (!t) return;
     if (!confirm(`למחוק את יום ${i + 1}?`)) return;
-    const days = (t.days || []).filter((_, idx) => idx !== i);
-    await persistDays(days, 'היום נמחק');
+    await persistDays((t.days || []).filter((_, idx) => idx !== i), 'היום נמחק');
   }
 
   $('addDayBtn').addEventListener('click', async () => {
     const t = currentTrip();
     if (!t) return;
-    const days = [...(t.days || []), {
-      n: (t.days || []).length + 1,
-      from: '', to: '', distanceKm: 0, ascentM: 0, descentM: 0, story: '', date: ''
-    }];
+    const days = [...(t.days || []), { n: 0, from: '', to: '', distanceKm: 0, ascentM: 0, descentM: 0, story: '', date: '' }];
     await persistDays(days, 'נוסף יום חדש. מלא את הפרטים ולחץ שמור יום.');
   });
 
-  // ---------- Gear checklist ----------
+  $('tripForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const t = currentTrip();
+    if (!isOwnerOf(t)) return;
+    const startDate = $('dStart').value;
+    const endDate = $('dEnd').value;
+    if (endDate < startDate) { alert('תאריך הסיום חייב להיות אחרי תאריך ההתחלה'); return; }
+    try {
+      await updateDoc(doc(db, 'trips', t.id), {
+        title: $('dTitle').value.trim(), startDate, endDate,
+        departureTime: $('dTime').value || '08:00', location: $('dLocation').value.trim(),
+        days: normalizeDays(t.days || [], startDate), updatedAt: serverTimestamp()
+      });
+      $('detailStatus').textContent = 'הפרטים נשמרו';
+    } catch (err) {
+      $('detailStatus').textContent = 'השמירה נכשלה: ' + err.code;
+    }
+  });
+
+  $('confirmBtn').addEventListener('click', async () => {
+    const t = currentTrip();
+    if (!isOwnerOf(t)) return;
+    const next = t.status === 'confirmed' ? 'draft' : 'confirmed';
+    try {
+      await updateDoc(doc(db, 'trips', t.id), { status: next, updatedAt: serverTimestamp() });
+      $('detailStatus').textContent = next === 'confirmed' ? 'הטיול אושר' : 'האישור בוטל';
+    } catch (err) {
+      $('detailStatus').textContent = 'העדכון נכשל: ' + err.code;
+    }
+  });
+
+  $('deleteBtn').addEventListener('click', async () => {
+    const t = currentTrip();
+    if (!isOwnerOf(t)) return;
+    if (!confirm('למחוק את "' + t.title + '" לצמיתות?')) return;
+    try {
+      await deleteDoc(doc(db, 'trips', t.id));
+      currentTripId = null;
+      editMode = false;
+      showScreen('list');
+    } catch (err) {
+      $('detailStatus').textContent = 'המחיקה נכשלה: ' + err.code;
+    }
+  });
+
+  // ---------- Gear ----------
   function renderGear(t, isOwner) {
     const gear = t.gear || [];
     const key = JSON.stringify(gear) + '|' + isOwner;
     if (key === lastGearKey) return;
     lastGearKey = key;
 
-    const list = $('gearList');
-    list.innerHTML = '';
-    $('gearSection').classList.toggle('hidden', !gear.length);
+    const pane = $('pane-gear');
+    pane.innerHTML = '';
+    if (!gear.length) { pane.appendChild(el('div', 'info-box', 'אין עדיין רשימת ציוד בטיול הזה.')); return; }
+
+    const all = gear.flatMap(c => c.items || []);
+    const done = all.filter(x => x.checked).length;
+    pane.appendChild(el('p', 'msg-line', `ארזתם ${done} מתוך ${all.length} פריטים · הסימון אישי לך בלבד`));
+
     gear.forEach((cat, ci) => {
-      list.appendChild(el('div', 'gearcat', cat.title || 'ציוד'));
+      const group = el('div', 'gear-group');
+      group.appendChild(el('h3', '', cat.title || 'ציוד'));
       (cat.items || []).forEach((item, ii) => {
-        const row = el('label', 'check');
+        const row = el('div', 'gear-item' + (item.checked ? ' checked' : ''));
         const box = document.createElement('input');
         box.type = 'checkbox';
         box.checked = !!item.checked;
-        box.disabled = !isOwner;
         box.addEventListener('change', () => toggleGear(ci, ii, box.checked));
-        row.append(box, document.createTextNode(item.label || ''));
-        list.appendChild(row);
+        const label = el('label', '', item.label || '');
+        row.append(box, label);
+        group.appendChild(row);
       });
+      pane.appendChild(group);
     });
   }
 
   async function toggleGear(ci, ii, checked) {
     const t = currentTrip();
-    if (!t || !isOwnerOf(t)) return;
+    if (!t) return;
     const gear = JSON.parse(JSON.stringify(t.gear || []));
     gear[ci].items[ii].checked = checked;
     try {
+      // Owner-only in the rules, so this is for the owner's own packing list.
       await updateDoc(doc(db, 'trips', t.id), { gear, updatedAt: serverTimestamp() });
     } catch (err) {
       $('detailStatus').textContent = 'עדכון הציוד נכשל: ' + err.code;
     }
   }
 
-  // ---------- Members ----------
+  // ---------- Members and invites ----------
   function renderMembers(t, isOwner) {
-    const list = $('membersList');
-    list.innerHTML = '';
     const members = t.memberUids || [];
-    $('inviteBox').classList.toggle('hidden', !isOwner);
+    const key = JSON.stringify(members) + '|' + JSON.stringify(t.roles || {}) + '|' + isOwner;
+    if (key === lastMembersKey) return;
+    lastMembersKey = key;
 
+    const pane = $('pane-members');
+    pane.innerHTML = '';
+    const box = el('div', 'gear-group');
+    box.appendChild(el('h3', '', 'משתתפים'));
     members.forEach((uid, i) => {
-      const row = el('div', 'member');
+      const row = el('div', 'member-row');
       const isThisOwner = uid === t.ownerUid;
       const isMe = currentUser && uid === currentUser.uid;
-      const label = isThisOwner ? 'בעלים' : ((t.roles && t.roles[uid]) === 'editor' ? 'עורך' : 'צופה');
-      const name = el('span', '', `משתתף ${i + 1}${isMe ? ' (אתה)' : ''}`);
-      row.append(name, el('small', 'note', label));
-
-      if (isOwner && !isThisOwner) {
-        const rm = el('button', 'danger small fit', 'הסר');
-        rm.addEventListener('click', () => removeMember(uid));
-        row.appendChild(rm);
-      }
-      list.appendChild(row);
+      const role = isThisOwner ? 'בעלים' : ((t.roles && t.roles[uid]) === 'editor' ? 'עורך' : 'צופה');
+      row.append(el('span', '', `משתתף ${i + 1}${isMe ? ' (אתה)' : ''}`), el('small', 'msg-line', role));
+      if (isOwner && !isThisOwner) row.appendChild(btn('הסר', 'btn-danger btn-small', () => removeMember(uid)));
+      box.appendChild(row);
     });
+    pane.appendChild(box);
+
+    if (isOwner) {
+      const panel = el('div', 'edit-panel');
+      panel.appendChild(el('h3', '', 'הזמנת חברים'));
+      const roleSel = document.createElement('select');
+      roleSel.id = 'inviteRole';
+      roleSel.innerHTML = '<option value="viewer">צופה</option><option value="editor">עורך</option>';
+      panel.appendChild(field('הרשאה לקישור החדש', roleSel));
+      panel.appendChild(btn('צור קישור הזמנה', 'btn-primary', createInvite));
+      panel.appendChild(el('p', 'msg-line', 'הרשאת עורך תופעל בשלב הבא. כרגע כל המשתתפים צופים.'));
+      panel.appendChild(el('div', '', ''));
+      const list = el('div', '');
+      list.id = 'inviteList';
+      panel.appendChild(list);
+      panel.appendChild(el('p', 'msg-line', ''));
+      panel.lastChild.id = 'inviteStatus';
+      pane.appendChild(panel);
+    }
   }
 
   async function removeMember(uid) {
     const t = currentTrip();
-    if (!t || !isOwnerOf(t)) return;
+    if (!isOwnerOf(t)) return;
     if (!confirm('להסיר את המשתתף מהטיול?')) return;
     try {
-      await updateDoc(doc(db, 'trips', t.id), {
-        memberUids: arrayRemove(uid),
-        [`roles.${uid}`]: deleteField()
-      });
-      $('inviteStatus').textContent = 'המשתתף הוסר';
+      await updateDoc(doc(db, 'trips', t.id), { memberUids: arrayRemove(uid), [`roles.${uid}`]: deleteField() });
+      setInviteStatus('המשתתף הוסר');
     } catch (err) {
-      $('inviteStatus').textContent = 'ההסרה נכשלה: ' + err.code;
+      setInviteStatus('ההסרה נכשלה: ' + err.code);
     }
   }
 
-  // ---------- Invites (owner only) ----------
+  function setInviteStatus(msg) {
+    const s = $('inviteStatus');
+    if (s) s.textContent = msg;
+  }
+
   function makeCode() {
     const bytes = new Uint8Array(12);
     crypto.getRandomValues(bytes);
@@ -761,95 +1421,73 @@
     return `${location.origin}${location.pathname}?join=${code}`;
   }
 
+  async function createInvite() {
+    const t = currentTrip();
+    if (!isOwnerOf(t)) return;
+    const role = document.getElementById('inviteRole').value;
+    try {
+      await setDoc(doc(db, 'invites', makeCode()), {
+        tripId: t.id, ownerUid: currentUser.uid, role, active: true, createdAt: serverTimestamp()
+      });
+      setInviteStatus('נוצר קישור חדש. העתק ושלח אותו.');
+      refreshInvites();
+    } catch (err) {
+      setInviteStatus('יצירת הקישור נכשלה: ' + err.code);
+    }
+  }
+
   async function refreshInvites() {
     const t = currentTrip();
     if (!isOwnerOf(t)) return;
     const list = $('inviteList');
+    if (!list) return;
     list.innerHTML = '';
     try {
-      const q = query(collection(db, 'invites'),
-        where('ownerUid', '==', currentUser.uid),
-        where('tripId', '==', t.id));
-      const snap = await getDocs(q);
-      if (snap.empty) {
-        list.appendChild(el('p', 'note', 'אין עדיין קישורי הזמנה.'));
-        return;
-      }
+      const snap = await getDocs(query(collection(db, 'invites'),
+        where('ownerUid', '==', currentUser.uid), where('tripId', '==', t.id)));
+      if (snap.empty) { list.appendChild(el('p', 'msg-line', 'אין עדיין קישורי הזמנה.')); return; }
       snap.docs.forEach(d => renderInvite(d.id, d.data(), list));
     } catch (err) {
-      list.appendChild(el('p', 'note', 'שגיאה בטעינת הקישורים: ' + err.code));
+      list.appendChild(el('p', 'msg-line', 'שגיאה בטעינת הקישורים: ' + err.code));
     }
   }
 
   function renderInvite(code, inv, list) {
-    const row = el('div', 'invite');
-    const info = el('span', '',
-      `${inv.role === 'editor' ? 'עורך' : 'צופה'} · ${inv.active ? 'פעיל' : 'בוטל'}`);
-    row.appendChild(info);
-
+    const row = el('div', 'invite-row');
+    row.appendChild(el('span', '', `${inv.role === 'editor' ? 'עורך' : 'צופה'} · ${inv.active ? 'פעיל' : 'בוטל'}`));
     if (inv.active) {
-      const copy = el('button', 'secondary small', 'העתק קישור');
-      copy.addEventListener('click', async () => {
+      row.appendChild(btn('העתק קישור', 'btn-soft btn-small', async () => {
         const link = inviteLink(code);
         try {
           await navigator.clipboard.writeText(link);
-          $('inviteStatus').textContent = 'הקישור הועתק';
+          setInviteStatus('הקישור הועתק');
         } catch (err) {
           prompt('העתק את הקישור:', link);
         }
-      });
-      const off = el('button', 'danger small', 'בטל');
-      off.addEventListener('click', async () => {
+      }));
+      row.appendChild(btn('בטל', 'btn-danger btn-small', async () => {
         try {
           await updateDoc(doc(db, 'invites', code), { active: false });
-          $('inviteStatus').textContent = 'הקישור בוטל';
+          setInviteStatus('הקישור בוטל');
           refreshInvites();
         } catch (err) {
-          $('inviteStatus').textContent = 'הביטול נכשל: ' + err.code;
+          setInviteStatus('הביטול נכשל: ' + err.code);
         }
-      });
-      row.append(copy, off);
+      }));
     }
     list.appendChild(row);
   }
 
-  $('createInviteBtn').addEventListener('click', async () => {
-    const t = currentTrip();
-    if (!isOwnerOf(t)) return;
-    const role = $('inviteRole').value;
-    const code = makeCode();
-    try {
-      await setDoc(doc(db, 'invites', code), {
-        tripId: t.id,
-        ownerUid: currentUser.uid,
-        role,
-        active: true,
-        createdAt: serverTimestamp()
-      });
-      $('inviteStatus').textContent = 'נוצר קישור חדש. העתק ושלח אותו.';
-      refreshInvites();
-    } catch (err) {
-      $('inviteStatus').textContent = 'יצירת הקישור נכשלה: ' + err.code;
-    }
-  });
-
-  // ---------- Joining through an invite link ----------
+  // ---------- Joining through a link ----------
   async function tryJoin(uid) {
     const code = new URLSearchParams(location.search).get('join');
     if (!code) return;
     history.replaceState({}, '', location.pathname);
-
     try {
       const invSnap = await getDoc(doc(db, 'invites', code));
-      if (!invSnap.exists() || !invSnap.data().active) {
-        showStatus('הקישור לא תקף או שבוטל.');
-        return;
-      }
+      if (!invSnap.exists() || !invSnap.data().active) { showStatus('הקישור לא תקף או שבוטל.'); return; }
       const inv = invSnap.data();
-      if (inv.ownerUid === uid) {
-        showStatus('זה הקישור שלך. אתה כבר בעל הטיול.');
-        return;
-      }
+      if (inv.ownerUid === uid) { showStatus('זה הקישור שלך. אתה כבר בעל הטיול.'); return; }
       await updateDoc(doc(db, 'trips', inv.tripId), {
         memberUids: arrayUnion(uid),
         [`roles.${uid}`]: inv.role,
@@ -862,72 +1500,42 @@
     }
   }
 
-  $('editToggleBtn').addEventListener('click', () => {
+  // ---------- Add to calendar (.ics) ----------
+  function icsEscape(s) {
+    return String(s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n');
+  }
+
+  function buildIcs(t) {
+    const stamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//trips74//HE', 'CALSCALE:GREGORIAN'];
+    (t.days || []).forEach((d, i) => {
+      if (!d.date) return;
+      lines.push('BEGIN:VEVENT',
+        `UID:${t.id}-${i + 1}@trips74`,
+        `DTSTAMP:${stamp}`,
+        `DTSTART;VALUE=DATE:${d.date.replace(/-/g, '')}`,
+        `DTEND;VALUE=DATE:${addDays(d.date, 1).replace(/-/g, '')}`,
+        `SUMMARY:${icsEscape(`${t.title} — יום ${i + 1}: ${d.from} ← ${d.to}`)}`,
+        'END:VEVENT');
+    });
+    lines.push('END:VCALENDAR');
+    return lines.join('\r\n');
+  }
+
+  $('icsBtn').addEventListener('click', () => {
     const t = currentTrip();
-    if (!isOwnerOf(t)) return;
-    editMode = !editMode;
-    lastDaysKey = null;
-    lastGearKey = null;
-    renderTripDetail();
+    if (!t) return;
+    const blob = new Blob([buildIcs(t)], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${t.title}.ics`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
   });
 
-  $('backBtn').addEventListener('click', () => {
-    editMode = false;
-    currentTripId = null;
-    showView('list');
-  });
-
-  $('tripForm').addEventListener('submit', async e => {
-    e.preventDefault();
-    const t = currentTrip();
-    if (!t || !isOwnerOf(t)) return;
-    const startDate = $('dStart').value;
-    const endDate = $('dEnd').value;
-    if (endDate < startDate) { alert('תאריך הסיום חייב להיות אחרי תאריך ההתחלה'); return; }
-
-    // If the start date moved, keep the day dates in sync with it.
-    const days = normalizeDays(t.days || [], startDate);
-
-    try {
-      await updateDoc(doc(db, 'trips', t.id), {
-        title: $('dTitle').value.trim(),
-        startDate,
-        endDate,
-        departureTime: $('dTime').value || '08:00',
-        location: $('dLocation').value.trim(),
-        days,
-        updatedAt: serverTimestamp()
-      });
-      $('detailStatus').textContent = 'הפרטים נשמרו';
-    } catch (err) {
-      $('detailStatus').textContent = 'השמירה נכשלה: ' + err.code;
-    }
-  });
-
-  $('confirmBtn').addEventListener('click', async () => {
-    const t = currentTrip();
-    if (!t || !isOwnerOf(t)) return;
-    const next = t.status === 'confirmed' ? 'draft' : 'confirmed';
-    try {
-      await updateDoc(doc(db, 'trips', t.id), { status: next, updatedAt: serverTimestamp() });
-      $('detailStatus').textContent = next === 'confirmed' ? 'הטיול אושר' : 'האישור בוטל';
-    } catch (err) {
-      $('detailStatus').textContent = 'העדכון נכשל: ' + err.code;
-    }
-  });
-
-  $('deleteBtn').addEventListener('click', async () => {
-    const t = currentTrip();
-    if (!t || !isOwnerOf(t)) return;
-    if (!confirm('למחוק את "' + t.title + '" לצמיתות?')) return;
-    try {
-      await deleteDoc(doc(db, 'trips', t.id));
-      currentTripId = null;
-      showView('list');
-    } catch (err) {
-      $('detailStatus').textContent = 'המחיקה נכשלה: ' + err.code;
-    }
-  });
-</script>
+  </script>
 </body>
 </html>
