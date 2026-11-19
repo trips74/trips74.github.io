@@ -104,6 +104,10 @@
       <h2 id="detailTitle" style="margin:0;font-size:22px"></h2>
       <span id="detailBadge" class="badge">טיוטה</span>
     </div>
+    <div class="row" style="margin-top:6px">
+      <button class="secondary small fit" id="editToggleBtn">ערוך</button>
+    </div>
+    <p id="summaryLine" class="note"></p>
     <p id="ownerNote" class="note hidden"></p>
     <div id="draftBar" class="draftbar hidden">הטיול בטיוטה. עבור על המסלול והציוד, ואז אשר.</div>
 
@@ -150,7 +154,7 @@
       <p class="note" id="inviteStatus"></p>
     </div>
 
-    <div class="section">
+    <div class="section" id="confirmSection">
       <button class="ok" id="confirmBtn">אשר את הטיול</button>
       <p class="note" id="confirmNote"></p>
     </div>
@@ -198,6 +202,7 @@
   let currentUser = null;
   let createMode = 'blank';
   let selectedTplId = null;
+  let editMode = false;
   let lastDaysKey = null;
   let lastGearKey = null;
 
@@ -494,6 +499,7 @@
     currentTripId = id;
     lastDaysKey = null;
     lastGearKey = null;
+    editMode = false;
     const t = currentTrip();
     if (!t) return;
     $('dTitle').value = t.title || '';
@@ -508,27 +514,43 @@
     if (isOwnerOf(t)) refreshInvites();
   }
 
+  function summaryText(t) {
+    const days = t.days || [];
+    const km = days.reduce((sum, d) => sum + (Number(d.distanceKm) || 0), 0);
+    const up = days.reduce((sum, d) => sum + (Number(d.ascentM) || 0), 0);
+    const parts = [`${t.startDate} — ${t.endDate}`];
+    if (days.length) parts.push(`${days.length} ימים`, `${km.toFixed(1)} ק״מ`, `עלייה ${Math.round(up)} מ׳`);
+    if (t.location) parts.push(t.location);
+    return parts.join(' · ');
+  }
+
   function renderTripDetail() {
     const t = currentTrip();
     if (!t) { currentTripId = null; showView('list'); return; }
 
     const isOwner = isOwnerOf(t);
+    const canEdit = isOwner && editMode;
     const confirmed = t.status === 'confirmed';
 
     $('detailTitle').textContent = t.title;
     $('detailBadge').textContent = confirmed ? 'מאושר' : 'טיוטה';
     $('detailBadge').className = 'badge' + (confirmed ? ' ok' : '');
-    $('draftBar').classList.toggle('hidden', confirmed);
+    $('draftBar').classList.toggle('hidden', confirmed || !isOwner);
+    $('summaryLine').textContent = summaryText(t);
+
+    $('editToggleBtn').classList.toggle('hidden', !isOwner);
+    $('editToggleBtn').textContent = editMode ? 'סיים עריכה' : 'ערוך';
 
     const note = $('ownerNote');
     note.classList.toggle('hidden', isOwner);
     note.textContent = 'אתה חבר בטיול הזה. רק הבעלים יכול לערוך אותו.';
 
-    for (const id of ['dTitle', 'dStart', 'dEnd', 'dTime', 'dLocation']) $(id).disabled = !isOwner;
-    $('saveBtn').classList.toggle('hidden', !isOwner);
-    $('addDayBtn').classList.toggle('hidden', !isOwner);
-    $('confirmBtn').classList.toggle('hidden', !isOwner);
-    $('deleteSection').classList.toggle('hidden', !isOwner);
+    // View mode shows the trip as a guide. Edit mode shows the editors.
+    for (const id of ['dTitle', 'dStart', 'dEnd', 'dTime', 'dLocation']) $(id).disabled = !canEdit;
+    $('tripForm').classList.toggle('hidden', !canEdit);
+    $('addDayBtn').classList.toggle('hidden', !canEdit);
+    $('confirmSection').classList.toggle('hidden', !canEdit);
+    $('deleteSection').classList.toggle('hidden', !canEdit);
 
     $('confirmBtn').textContent = confirmed ? 'בטל אישור' : 'אשר את הטיול';
     $('confirmBtn').className = confirmed ? 'secondary' : 'ok';
@@ -537,9 +559,9 @@
       ? 'הטיול מאושר. ביטול האישור יחזיר אותו לטיוטה.'
       : 'אישור מסמן שהתוכנית סופית. אפשר לבטל בכל רגע.';
 
-    renderDays(t, isOwner);
+    renderDays(t, canEdit);
     renderGear(t, isOwner);
-    renderMembers(t, isOwner);
+    renderMembers(t, canEdit);
   }
 
   // Rebuilds the day editor only when the data changed, so typing is not overwritten.
@@ -840,7 +862,17 @@
     }
   }
 
+  $('editToggleBtn').addEventListener('click', () => {
+    const t = currentTrip();
+    if (!isOwnerOf(t)) return;
+    editMode = !editMode;
+    lastDaysKey = null;
+    lastGearKey = null;
+    renderTripDetail();
+  });
+
   $('backBtn').addEventListener('click', () => {
+    editMode = false;
     currentTripId = null;
     showView('list');
   });
