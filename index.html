@@ -621,10 +621,12 @@
   .seg > *{flex:1}
   .seg .tab-btn{width:100%}
 
+  .offline-bar{position:sticky;top:0;z-index:20;background:#FFF6E5;border-bottom:1px solid #E8C170;padding:8px 12px;text-align:center;font-size:14px}
 </style>
 </head>
 <body>
 <div id="app">
+  <div id="offlineBar" class="offline-bar hidden">אין חיבור לאינטרנט. מוצג המידע השמור במכשיר, והשינויים יישמרו כשיחזור החיבור.</div>
 
   <!-- LOGIN -->
   <section id="loginView" class="hidden">
@@ -714,6 +716,8 @@
 
       <div id="pane-route"></div>
       <div id="pane-gear" class="hidden"></div>
+      <div id="pane-lodging" class="hidden"></div>
+      <div id="pane-expenses" class="hidden"></div>
       <div id="pane-members" class="hidden"></div>
       <div id="pane-soon" class="hidden"></div>
 
@@ -730,7 +734,7 @@
     getAuth, GoogleAuthProvider, signInWithCredential, onAuthStateChanged, signOut
   } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js";
   import {
-    getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp,
+    initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, addDoc, query, where, onSnapshot, serverTimestamp,
     doc, updateDoc, deleteDoc, getDocs, getDoc, setDoc, arrayUnion, arrayRemove, deleteField
   } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js";
 
@@ -746,17 +750,19 @@
 
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
-  const db = getFirestore(app);
+  const db = initializeFirestore(app, {
+    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+  });
 
   // Tabs. Items marked soon are shown in the same bar, so the layout never changes.
   const TABS = [
     { id: 'route', label: 'מסלול' },
     { id: 'gear', label: 'ציוד' },
     { id: 'members', label: 'חברים' },
-    { id: 'lodging', label: 'לינה', soon: true },
+    { id: 'lodging', label: 'לינה' },
     { id: 'transport', label: 'הסעה', soon: true },
     { id: 'links', label: 'קישורים', soon: true },
-    { id: 'expenses', label: 'קופה', soon: true }
+    { id: 'expenses', label: 'קופה' }
   ];
 
   const $ = id => document.getElementById(id);
@@ -772,6 +778,11 @@
   let lastRouteKey = null;
   let lastGearKey = null;
   let lastMembersKey = null;
+  let lastLodgingKey = null;
+  let expenses = [];
+  let expUnsub = null;
+  let lastExpMembersKey = null;
+  let lastExpKey = null;
 
   // ---------- Helpers ----------
   function pad(n) { return n < 10 ? '0' + n : '' + n; }
@@ -880,8 +891,9 @@
       $('tripView').classList.add('hidden');
       $('loginView').classList.remove('hidden');
       currentTripId = null;
-      lastRouteKey = lastGearKey = lastMembersKey = null;
+      lastRouteKey = lastGearKey = lastMembersKey = lastLodgingKey = lastExpKey = lastExpMembersKey = null;
       if (unsubscribeTrips) { unsubscribeTrips(); unsubscribeTrips = null; }
+      unsubscribeExpenses();
     }
   });
 
@@ -1043,7 +1055,7 @@
     currentTripId = id;
     currentTab = 'route';
     editMode = false;
-    lastRouteKey = lastGearKey = lastMembersKey = null;
+    lastRouteKey = lastGearKey = lastMembersKey = lastLodgingKey = lastExpKey = lastExpMembersKey = null;
     const t = currentTrip();
     if (!t) return;
     $('dTitle').value = t.title || '';
@@ -1053,10 +1065,12 @@
     $('dLocation').value = t.location || '';
     $('detailStatus').textContent = '';
     showScreen('trip');
+    subscribeExpenses(id);
     renderTripDetail();
   }
 
   $('backBtn').addEventListener('click', () => {
+    unsubscribeExpenses();
     editMode = false;
     currentTripId = null;
     showScreen('list');
@@ -1109,6 +1123,8 @@
     if (currentTab === 'route') renderRoute(t, canEdit);
     if (currentTab === 'gear') renderGear(t, isOwner);
     if (currentTab === 'members') { renderMembers(t, isOwner); if (isOwner) refreshInvites(); }
+    if (currentTab === 'lodging') renderLodging(t, canEdit);
+    if (currentTab === 'expenses') renderExpenses(t);
   }
 
   function renderTabbar() {
@@ -1127,6 +1143,8 @@
     $('pane-route').classList.toggle('hidden', tab !== 'route');
     $('pane-gear').classList.toggle('hidden', tab !== 'gear');
     $('pane-members').classList.toggle('hidden', tab !== 'members');
+    $('pane-lodging').classList.toggle('hidden', tab !== 'lodging');
+    $('pane-expenses').classList.toggle('hidden', tab !== 'expenses');
     const soon = TABS.find(x => x.id === tab && x.soon);
     $('pane-soon').classList.toggle('hidden', !soon);
     if (soon) {
@@ -1299,7 +1317,11 @@
     if (!isOwnerOf(t)) return;
     if (!confirm('למחוק את "' + t.title + '" לצמיתות?')) return;
     try {
+      // Remove the trip's expenses first, so no orphan records remain
+      const exp = await getDocs(collection(db, 'trips', t.id, 'expenses'));
+      await Promise.all(exp.docs.map(d => deleteDoc(d.ref)));
       await deleteDoc(doc(db, 'trips', t.id));
+      unsubscribeExpenses();
       currentTripId = null;
       editMode = false;
       showScreen('list');
@@ -1307,6 +1329,294 @@
       $('detailStatus').textContent = 'המחיקה נכשלה: ' + err.code;
     }
   });
+
+  // ---------- Lodging (one card per night) ----------
+  const LODGING_STATUS = [
+    { value: 'todo', label: 'לא הוזמן', tag: 'tbd' },
+    { value: 'booked', label: 'בהזמנה', tag: '' },
+    { value: 'confirmed', label: 'מאושר', tag: 'confirmed' }
+  ];
+
+  // A night sits after each day except the last one
+  function nightsOf(t) {
+    const days = t.days || [];
+    return days.slice(0, Math.max(days.length - 1, 0)).map((d, i) => ({ idx: i, date: d.date || '' }));
+  }
+
+  function safeHref(url) {
+    return /^https?:\/\//i.test(url || '') ? url : '';
+  }
+
+  function renderLodging(t, canEdit) {
+    const nights = nightsOf(t);
+    const lodging = t.lodging || [];
+    const key = JSON.stringify(nights) + '|' + JSON.stringify(lodging) + '|' + canEdit;
+    if (key === lastLodgingKey) return;
+    lastLodgingKey = key;
+
+    const pane = $('pane-lodging');
+    pane.innerHTML = '';
+    if (!nights.length) {
+      pane.appendChild(el('div', 'info-box', 'בטיול של יום אחד אין לילות לינה.'));
+      return;
+    }
+
+    nights.forEach(n => {
+      const L = lodging[n.idx] || {};
+      const st = LODGING_STATUS.find(x => x.value === L.status) || LODGING_STATUS[0];
+      const card = el('div', 'night-card');
+
+      const head = el('div', 'night-head');
+      const titleBox = el('div');
+      titleBox.append(el('div', 'nt', `לילה ${n.idx + 1}`), el('div', 'nt-sub', n.date));
+      head.append(titleBox, el('span', 'status-tag ' + st.tag, st.label));
+      card.appendChild(head);
+
+      const body = el('div', 'night-body');
+      if (canEdit) {
+        const nameIn = inputOf('text', L.name || '');
+        const statusSel = document.createElement('select');
+        LODGING_STATUS.forEach(s => {
+          const o = document.createElement('option');
+          o.value = s.value;
+          o.textContent = s.label;
+          if (s.value === st.value) o.selected = true;
+          statusSel.appendChild(o);
+        });
+        const phoneIn = inputOf('text', L.phone || '');
+        const linkIn = inputOf('text', L.link || '');
+        const notesIn = document.createElement('textarea');
+        notesIn.value = L.notes || '';
+        body.append(
+          field('מקום לינה', nameIn, true),
+          field('סטטוס', statusSel),
+          field('טלפון', phoneIn),
+          field('קישור להזמנה', linkIn, true),
+          field('הערות', notesIn, true)
+        );
+        body.appendChild(btn('שמור לינה', 'btn-primary', () => saveNight(n.idx, {
+          name: nameIn.value.trim(), status: statusSel.value, phone: phoneIn.value.trim(),
+          link: linkIn.value.trim(), notes: notesIn.value.trim()
+        })));
+      } else {
+        body.appendChild(el('p', '', L.name || 'טרם נבחר מקום לינה'));
+        if (L.phone) {
+          const tel = el('a', 'pill-link', `📞 ${L.phone}`);
+          tel.href = 'tel:' + L.phone.replace(/\s+/g, '');
+          body.appendChild(tel);
+        }
+        const href = safeHref(L.link);
+        if (href) {
+          const a = el('a', 'pill-link', '🔗 לקישור ההזמנה');
+          a.href = href; a.target = '_blank'; a.rel = 'noopener';
+          body.appendChild(a);
+        }
+        if (L.notes) body.appendChild(el('p', 'note', L.notes));
+      }
+      card.appendChild(body);
+      pane.appendChild(card);
+    });
+  }
+
+  async function saveNight(idx, values) {
+    const t = currentTrip();
+    if (!isOwnerOf(t)) return;
+    const count = Math.max((t.days || []).length - 1, 0);
+    const lodging = Array.from({ length: count }, (_, i) => (t.lodging || [])[i] || {});
+    lodging[idx] = values;
+    try {
+      await updateDoc(doc(db, 'trips', t.id), { lodging, updatedAt: serverTimestamp() });
+      $('detailStatus').textContent = `לינה ${idx + 1} נשמרה`;
+    } catch (err) {
+      $('detailStatus').textContent = 'השמירה נכשלה: ' + err.code;
+    }
+  }
+
+  // ---------- Shared expenses (קופה) ----------
+  function subscribeExpenses(tripId) {
+    unsubscribeExpenses();
+    expUnsub = onSnapshot(collection(db, 'trips', tripId, 'expenses'), snap => {
+      expenses = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      const t = currentTrip();
+      if (t && currentTab === 'expenses') renderExpenses(t);
+    }, err => {
+      $('detailStatus').textContent = 'שגיאה בטעינת הקופה: ' + err.code;
+    });
+  }
+
+  function unsubscribeExpenses() {
+    if (expUnsub) { expUnsub(); expUnsub = null; }
+    expenses = [];
+  }
+
+  function fmtMoney(n) {
+    return (Math.round(n * 100) / 100).toLocaleString('he-IL') + ' ₪';
+  }
+
+  function memberLabel(t, uid) {
+    const idx = (t.memberUids || []).indexOf(uid);
+    if (idx < 0) return 'משתתף שעזב';
+    const me = currentUser && uid === currentUser.uid ? ' (אתה)' : '';
+    return `משתתף ${idx + 1}${me}`;
+  }
+
+  // Net balance per member: positive = should receive, negative = owes
+  function computeBalances(t) {
+    const members = t.memberUids || [];
+    const bal = Object.fromEntries(members.map(u => [u, 0]));
+    for (const e of expenses) {
+      const amount = Number(e.amount) || 0;
+      const split = (e.splitWith || members).filter(u => members.includes(u));
+      if (!split.length) continue;
+      if (bal[e.paidBy] !== undefined) bal[e.paidBy] += amount;
+      const share = amount / split.length;
+      split.forEach(u => { if (bal[u] !== undefined) bal[u] -= share; });
+    }
+    return bal;
+  }
+
+  // Minimal set of transfers that settles all balances
+  function settle(bal) {
+    const creditors = [], debtors = [];
+    for (const [u, v] of Object.entries(bal)) {
+      const r = Math.round(v * 100) / 100;
+      if (r > 0.01) creditors.push({ u, v: r });
+      else if (r < -0.01) debtors.push({ u, v: -r });
+    }
+    const out = [];
+    let i = 0, j = 0;
+    while (i < debtors.length && j < creditors.length) {
+      const x = Math.min(debtors[i].v, creditors[j].v);
+      out.push({ from: debtors[i].u, to: creditors[j].u, amount: Math.round(x * 100) / 100 });
+      debtors[i].v -= x;
+      creditors[j].v -= x;
+      if (debtors[i].v < 0.01) i++;
+      if (creditors[j].v < 0.01) j++;
+    }
+    return out;
+  }
+
+  function renderExpenses(t) {
+    const pane = $('pane-expenses');
+    if (!$('expOut')) {
+      pane.innerHTML = '';
+      const out = el('div', ''); out.id = 'expOut';
+      const form = el('div', ''); form.id = 'expForm';
+      pane.append(out, form);
+    }
+    const membersKey = JSON.stringify(t.memberUids || []);
+    if (lastExpMembersKey !== membersKey) {
+      lastExpMembersKey = membersKey;
+      buildExpenseForm(t);
+    }
+    renderExpenseOut(t);
+  }
+
+  function buildExpenseForm(t) {
+    const box = $('expForm');
+    box.innerHTML = '';
+    const panel = el('div', 'edit-panel');
+    panel.appendChild(el('h3', '', 'הוספת הוצאה'));
+
+    const title = inputOf('text', '');
+    title.maxLength = 80;
+    const amount = inputOf('number', '');
+    amount.placeholder = '0';
+    const date = inputOf('date', todayIso());
+    const paidBy = document.createElement('select');
+    (t.memberUids || []).forEach(u => {
+      const o = document.createElement('option');
+      o.value = u;
+      o.textContent = memberLabel(t, u);
+      if (currentUser && u === currentUser.uid) o.selected = true;
+      paidBy.appendChild(o);
+    });
+
+    panel.append(
+      field('על מה שולמו', title, true),
+      field('סכום (₪)', amount),
+      field('תאריך', date),
+      field('מי שילם', paidBy, true),
+      btn('הוסף הוצאה', 'btn-primary', () => addExpense(t, title, amount, date, paidBy))
+    );
+    box.appendChild(panel);
+  }
+
+  async function addExpense(t, titleIn, amountIn, dateIn, paidByIn) {
+    const title = titleIn.value.trim();
+    const amount = Number(amountIn.value);
+    if (!title) { alert('כתוב על מה שולם'); return; }
+    if (!(amount > 0)) { alert('הסכום חייב להיות גדול מאפס'); return; }
+    if (!(t.memberUids || []).includes(paidByIn.value)) { alert('בחר מי שילם'); return; }
+    try {
+      await addDoc(collection(db, 'trips', t.id, 'expenses'), {
+        title, amount, paidBy: paidByIn.value, date: dateIn.value || todayIso(),
+        splitWith: t.memberUids || [], createdBy: currentUser.uid, createdAt: serverTimestamp()
+      });
+      titleIn.value = '';
+      amountIn.value = '';
+    } catch (err) {
+      alert('שמירת ההוצאה נכשלה: ' + err.code);
+    }
+  }
+
+  async function deleteExpense(t, id) {
+    if (!confirm('למחוק את ההוצאה?')) return;
+    try {
+      await deleteDoc(doc(db, 'trips', t.id, 'expenses', id));
+    } catch (err) {
+      $('detailStatus').textContent = 'המחיקה נכשלה: ' + err.code;
+    }
+  }
+
+  function renderExpenseOut(t) {
+    const out = $('expOut');
+    out.innerHTML = '';
+    const members = t.memberUids || [];
+    const total = expenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+    const perPerson = members.length ? total / members.length : 0;
+
+    const summary = el('div', 'gear-group');
+    summary.appendChild(el('h3', '', 'סיכום'));
+    summary.appendChild(el('p', '', `סה״כ הוצאות: ${fmtMoney(total)}`));
+    summary.appendChild(el('p', 'note', `חלק לאדם: ${fmtMoney(perPerson)}`));
+    out.appendChild(summary);
+
+    const bal = computeBalances(t);
+    const balBox = el('div', 'gear-group');
+    balBox.appendChild(el('h3', '', 'מאזן'));
+    if (!expenses.length) {
+      balBox.appendChild(el('p', 'note', 'עדיין אין הוצאות.'));
+    } else {
+      members.forEach(u => {
+        const v = Math.round((bal[u] || 0) * 100) / 100;
+        const row = el('div', 'member-row');
+        const text = v > 0.01 ? `מקבל ${fmtMoney(v)}` : v < -0.01 ? `חייב ${fmtMoney(-v)}` : 'מאוזן';
+        row.append(el('span', '', memberLabel(t, u)), el('small', 'msg-line', text));
+        balBox.appendChild(row);
+      });
+      const transfers = settle(bal);
+      balBox.appendChild(el('h3', '', 'להעברות'));
+      if (!transfers.length) balBox.appendChild(el('p', 'note', 'הכול מאוזן.'));
+      transfers.forEach(x => balBox.appendChild(el('p', '',
+        `${memberLabel(t, x.from)} ← ${memberLabel(t, x.to)}: ${fmtMoney(x.amount)}`)));
+    }
+    out.appendChild(balBox);
+
+    const list = el('div', 'gear-group');
+    list.appendChild(el('h3', '', 'הוצאות'));
+    if (!expenses.length) list.appendChild(el('p', 'note', 'אין הוצאות לתצוגה.'));
+    expenses.forEach(e => {
+      const row = el('div', 'member-row');
+      const info = el('div', '');
+      info.append(el('strong', '', e.title), el('div', 'note', `${e.date || ''} · שילם: ${memberLabel(t, e.paidBy)}`));
+      row.append(info, el('span', '', fmtMoney(Number(e.amount) || 0)));
+      row.appendChild(btn('מחק', 'btn-danger btn-small', () => deleteExpense(t, e.id)));
+      list.appendChild(row);
+    });
+    out.appendChild(list);
+  }
 
   // ---------- Gear ----------
   function renderGear(t, isOwner) {
@@ -1536,6 +1846,18 @@
     URL.revokeObjectURL(url);
   });
 
-  </script>
+  
+  // ---------- Offline ----------
+  function updateOnlineState() {
+    $('offlineBar').classList.toggle('hidden', navigator.onLine);
+  }
+  window.addEventListener('online', updateOnlineState);
+  window.addEventListener('offline', updateOnlineState);
+  updateOnlineState();
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(err => console.warn('service worker failed', err));
+  }
+</script>
 </body>
 </html>
