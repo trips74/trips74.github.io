@@ -19,16 +19,19 @@
   .selected{background:var(--olive-dk);color:#fff}
   .danger{background:var(--danger);color:#fff;width:100%}
   .ok{background:var(--ok);color:#fff;width:100%}
+  .small{padding:8px 12px;font-size:14px}
   .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;margin:10px 0}
   .card.clickable{cursor:pointer}
   .card small{color:var(--muted)}
   label{display:block;font-size:14px;margin-top:8px}
-  input{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font:inherit;margin:6px 0 4px;background:#fff}
-  input:disabled{background:var(--paper)}
+  input,textarea{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font:inherit;margin:6px 0 4px;background:#fff}
+  textarea{min-height:70px;resize:vertical}
+  input:disabled,textarea:disabled{background:var(--paper)}
   .hidden{display:none !important}
   .empty{color:var(--muted);text-align:center;padding:24px}
-  .row{display:flex;gap:8px;margin-top:12px}
+  .row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
   .row > *{flex:1}
+  .row > .fit{flex:0 0 auto}
   #userBar{display:flex;justify-content:space-between;align-items:center;margin-top:10px}
   .badge{display:inline-block;font-size:12px;padding:3px 10px;border-radius:999px;background:var(--line);color:var(--ink)}
   .badge.ok{background:var(--ok);color:#fff;width:auto}
@@ -36,6 +39,11 @@
   .section{margin-top:16px;border-top:1px solid var(--line);padding-top:12px}
   .note{color:var(--muted);font-size:13px;margin:6px 0}
   .tpl{display:block;width:100%;text-align:start;background:#fff;color:var(--ink);border:1px solid var(--line);margin:6px 0}
+  .draftbar{background:#FFF6E5;border:1px solid #E8C170;border-radius:10px;padding:10px;font-size:14px;margin-top:10px}
+  .gearcat{font-weight:600;margin-top:8px}
+  .check{display:flex;gap:8px;align-items:center;margin:4px 0;font-size:15px}
+  .check input{width:auto;margin:0}
+  .dayhead{display:flex;justify-content:space-between;align-items:center}
 </style>
 </head>
 <body>
@@ -89,11 +97,12 @@
   <section id="tripView" class="hidden">
     <button class="back" id="backBtn">← חזרה לרשימה</button>
 
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+    <div class="dayhead">
       <h2 id="detailTitle" style="margin:0;font-size:22px"></h2>
       <span id="detailBadge" class="badge">טיוטה</span>
     </div>
     <p id="ownerNote" class="note hidden"></p>
+    <div id="draftBar" class="draftbar hidden">הטיול בטיוטה. עבור על המסלול והציוד, ואז אשר.</div>
 
     <form id="tripForm" class="section">
       <label>שם הטיול<input id="dTitle" required maxlength="80"></label>
@@ -102,14 +111,22 @@
       <label>שעת יציאה<input id="dTime" type="time" value="08:00"></label>
       <label>מיקום (לתחזית מזג אוויר)<input id="dLocation" maxlength="80" placeholder="למשל: צפת"></label>
       <div class="row">
-        <button class="primary" type="submit" id="saveBtn">שמור שינויים</button>
+        <button class="primary" type="submit" id="saveBtn">שמור פרטים</button>
       </div>
     </form>
 
-    <div id="daysSection" class="section hidden">
-      <h3 style="margin:0 0 6px">מסלול</h3>
+    <div class="section">
+      <div class="dayhead">
+        <h3 style="margin:0">מסלול</h3>
+        <span class="note" id="dayCount"></span>
+      </div>
       <div id="daysList"></div>
-      <p class="note" id="gearNote"></p>
+      <button class="secondary" id="addDayBtn" style="width:100%">הוסף יום</button>
+    </div>
+
+    <div class="section" id="gearSection">
+      <h3 style="margin:0 0 6px">ציוד</h3>
+      <div id="gearList"></div>
     </div>
 
     <div class="section">
@@ -117,7 +134,7 @@
       <p class="note" id="confirmNote"></p>
     </div>
 
-    <div class="section">
+    <div class="section" id="deleteSection">
       <button class="danger" id="deleteBtn">מחק טיול</button>
       <p class="note">מחיקה היא סופית, ורק הבעלים יכול למחוק.</p>
     </div>
@@ -160,6 +177,8 @@
   let currentUser = null;
   let createMode = 'blank';
   let selectedTplId = null;
+  let lastDaysKey = null;
+  let lastGearKey = null;
 
   // ---------- Helpers ----------
   function pad(n) { return n < 10 ? '0' + n : '' + n; }
@@ -169,6 +188,36 @@
     const [y, m, d] = dateStr.split('-').map(Number);
     const dt = new Date(y, m - 1, d + n);
     return dt.getFullYear() + '-' + pad(dt.getMonth() + 1) + '-' + pad(dt.getDate());
+  }
+
+  function el(tag, className, text) {
+    const e = document.createElement(tag);
+    if (className) e.className = className;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  function field(labelText, input) {
+    const l = document.createElement('label');
+    l.textContent = labelText;
+    l.appendChild(input);
+    return l;
+  }
+
+  function numberInput(value) {
+    const i = document.createElement('input');
+    i.type = 'number';
+    i.min = '0';
+    i.step = 'any';
+    i.value = value ?? 0;
+    return i;
+  }
+
+  function textInput(value) {
+    const i = document.createElement('input');
+    i.type = 'text';
+    i.value = value ?? '';
+    return i;
   }
 
   function showStatus(msg) {
@@ -181,6 +230,14 @@
   function showView(name) {
     $('listView').classList.toggle('hidden', name !== 'list');
     $('tripView').classList.toggle('hidden', name !== 'trip');
+  }
+
+  function currentTrip() {
+    return trips.find(x => x.id === currentTripId);
+  }
+
+  function isOwnerOf(t) {
+    return !!(t && currentUser && t.ownerUid === currentUser.uid);
   }
 
   // ---------- Login (Google Identity Services) ----------
@@ -223,6 +280,8 @@
       $('tripView').classList.add('hidden');
       $('loginView').classList.remove('hidden');
       currentTripId = null;
+      lastDaysKey = null;
+      lastGearKey = null;
       if (unsubscribeTrips) { unsubscribeTrips(); unsubscribeTrips = null; }
     }
   });
@@ -247,23 +306,16 @@
     const list = $('tripList');
     list.innerHTML = '';
     if (!trips.length) {
-      const empty = document.createElement('div');
-      empty.className = 'empty';
-      empty.textContent = 'עדיין אין טיולים. צור את הראשון!';
-      list.appendChild(empty);
+      list.appendChild(el('div', 'empty', 'עדיין אין טיולים. צור את הראשון!'));
       return;
     }
     for (const t of trips) {
-      const card = document.createElement('div');
-      card.className = 'card clickable';
-      const title = document.createElement('strong');
-      title.textContent = t.title;
-      const badge = document.createElement('span');
-      badge.className = 'badge' + (t.status === 'confirmed' ? ' ok' : '');
+      const card = el('div', 'card clickable');
+      const title = el('strong', '', t.title);
+      const badge = el('span', 'badge' + (t.status === 'confirmed' ? ' ok' : ''),
+        t.status === 'confirmed' ? 'מאושר' : 'טיוטה');
       badge.style.marginInlineStart = '8px';
-      badge.textContent = t.status === 'confirmed' ? 'מאושר' : 'טיוטה';
-      const dates = document.createElement('small');
-      dates.textContent = `${t.startDate} — ${t.endDate}`;
+      const dates = el('small', '', `${t.startDate} — ${t.endDate}`);
       card.append(title, badge, document.createElement('br'), dates);
       card.addEventListener('click', () => openTrip(t.id));
       list.appendChild(card);
@@ -310,18 +362,13 @@
       !term || (t.title || '').toLowerCase().includes(term) || (t.region || '').toLowerCase().includes(term)
     );
     if (!matches.length) {
-      const empty = document.createElement('div');
-      empty.className = 'note';
-      empty.textContent = templates.length ? 'אין תבנית שתואמת את החיפוש.' : 'אין עדיין תבניות מאושרות.';
-      list.appendChild(empty);
+      list.appendChild(el('div', 'note', templates.length ? 'אין תבנית שתואמת את החיפוש.' : 'אין עדיין תבניות מאושרות.'));
       return;
     }
     for (const t of matches) {
-      const btn = document.createElement('button');
+      const btn = el('button', 'tpl' + (t.id === selectedTplId ? ' selected' : ''),
+        `${t.title} · ${t.region || ''} · ${(t.days || []).length} ימים`);
       btn.type = 'button';
-      btn.className = 'tpl' + (t.id === selectedTplId ? ' selected' : '');
-      const days = (t.days || []).length;
-      btn.textContent = `${t.title} · ${t.region || ''} · ${days} ימים`;
       btn.addEventListener('click', () => selectTemplate(t.id));
       list.appendChild(btn);
     }
@@ -333,8 +380,7 @@
     if (!t) return;
     if (!$('tripTitle').value.trim()) $('tripTitle').value = t.title || '';
     const totalKm = (t.days || []).reduce((s, d) => s + (Number(d.distanceKm) || 0), 0);
-    $('tplSummary').textContent =
-      `${(t.days || []).length} ימים · ${totalKm.toFixed(1)} ק״מ · ${t.region || ''}`;
+    $('tplSummary').textContent = `${(t.days || []).length} ימים · ${totalKm.toFixed(1)} ק״מ · ${t.region || ''}`;
     if ($('startDate').value && (t.days || []).length) {
       $('endDate').value = addDays($('startDate').value, t.days.length - 1);
     }
@@ -382,9 +428,9 @@
     const tpl = createMode === 'template' ? templates.find(x => x.id === selectedTplId) : null;
     if (createMode === 'template' && !tpl) { alert('בחר תבנית מהרשימה, או עבור ל"מאפס"'); return; }
 
-    // Copy the template structure into the trip. Dates are recalculated from the chosen start date.
+    // Copy the template into the trip as a draft. Dates are calculated from the start date.
     const days = tpl ? (tpl.days || []).map((d, i) => ({
-      n: d.n ?? i + 1,
+      n: i + 1,
       from: d.from || '',
       to: d.to || '',
       distanceKm: Number(d.distanceKm) || 0,
@@ -424,7 +470,9 @@
   // ---------- Trip details ----------
   function openTrip(id) {
     currentTripId = id;
-    const t = trips.find(x => x.id === id);
+    lastDaysKey = null;
+    lastGearKey = null;
+    const t = currentTrip();
     if (!t) return;
     $('dTitle').value = t.title || '';
     $('dStart').value = t.startDate || '';
@@ -437,15 +485,16 @@
   }
 
   function renderTripDetail() {
-    const t = trips.find(x => x.id === currentTripId);
+    const t = currentTrip();
     if (!t) { currentTripId = null; showView('list'); return; }
 
-    const isOwner = currentUser && t.ownerUid === currentUser.uid;
+    const isOwner = isOwnerOf(t);
     const confirmed = t.status === 'confirmed';
 
     $('detailTitle').textContent = t.title;
     $('detailBadge').textContent = confirmed ? 'מאושר' : 'טיוטה';
     $('detailBadge').className = 'badge' + (confirmed ? ' ok' : '');
+    $('draftBar').classList.toggle('hidden', confirmed);
 
     const note = $('ownerNote');
     note.classList.toggle('hidden', isOwner);
@@ -453,8 +502,9 @@
 
     for (const id of ['dTitle', 'dStart', 'dEnd', 'dTime', 'dLocation']) $(id).disabled = !isOwner;
     $('saveBtn').classList.toggle('hidden', !isOwner);
+    $('addDayBtn').classList.toggle('hidden', !isOwner);
     $('confirmBtn').classList.toggle('hidden', !isOwner);
-    $('deleteBtn').closest('.section').classList.toggle('hidden', !isOwner);
+    $('deleteSection').classList.toggle('hidden', !isOwner);
 
     $('confirmBtn').textContent = confirmed ? 'בטל אישור' : 'אשר את הטיול';
     $('confirmBtn').className = confirmed ? 'secondary' : 'ok';
@@ -463,38 +513,155 @@
       ? 'הטיול מאושר. ביטול האישור יחזיר אותו לטיוטה.'
       : 'אישור מסמן שהתוכנית סופית. אפשר לבטל בכל רגע.';
 
-    renderDays(t);
+    renderDays(t, isOwner);
+    renderGear(t, isOwner);
   }
 
-  function renderDays(t) {
-    const section = $('daysSection');
+  // Rebuilds the day editor only when the data changed, so typing is not overwritten.
+  function renderDays(t, isOwner) {
+    const days = t.days || [];
+    const key = JSON.stringify(days) + '|' + isOwner;
+    $('dayCount').textContent = days.length ? `${days.length} ימים` : '';
+    if (key === lastDaysKey) return;
+    lastDaysKey = key;
+
     const list = $('daysList');
     list.innerHTML = '';
-    const days = t.days || [];
-    section.classList.toggle('hidden', !days.length && !(t.gear || []).length);
     if (!days.length) {
-      $('gearNote').textContent = (t.gear || []).length
-        ? `נוספו ${t.gear.length} קטגוריות ציוד מהתבנית.` : '';
+      list.appendChild(el('div', 'note', isOwner ? 'אין עדיין ימים במסלול. הוסף יום למטה.' : 'אין עדיין ימים במסלול.'));
       return;
     }
-    for (const d of days) {
-      const card = document.createElement('div');
-      card.className = 'card';
-      const title = document.createElement('strong');
-      title.textContent = `יום ${d.n}: ${d.from} ← ${d.to}`;
-      const meta = document.createElement('small');
-      meta.textContent = `${d.date} · ${d.distanceKm} ק״מ · עלייה ${d.ascentM} מ׳ · ירידה ${d.descentM} מ׳`;
-      card.append(title, document.createElement('br'), meta);
-      if (d.story) {
-        const story = document.createElement('p');
-        story.className = 'note';
-        story.textContent = d.story;
-        card.appendChild(story);
+
+    days.forEach((d, i) => {
+      const card = el('div', 'card');
+      const head = el('div', 'dayhead');
+      head.append(el('strong', '', `יום ${i + 1}`), el('small', '', d.date || ''));
+      card.appendChild(head);
+
+      if (!isOwner) {
+        card.appendChild(el('p', '', `${d.from} ← ${d.to}`));
+        card.appendChild(el('small', '', `${d.distanceKm} ק״מ · עלייה ${d.ascentM} מ׳ · ירידה ${d.descentM} מ׳`));
+        if (d.story) card.appendChild(el('p', 'note', d.story));
+        list.appendChild(card);
+        return;
       }
+
+      const fromIn = textInput(d.from);
+      const toIn = textInput(d.to);
+      const distIn = numberInput(d.distanceKm);
+      const upIn = numberInput(d.ascentM);
+      const downIn = numberInput(d.descentM);
+      const storyIn = document.createElement('textarea');
+      storyIn.value = d.story || '';
+
+      card.append(
+        field('מ־', fromIn),
+        field('עד', toIn),
+        field('מרחק (ק״מ)', distIn),
+        field('עלייה (מ׳)', upIn),
+        field('ירידה (מ׳)', downIn),
+        field('תיאור', storyIn)
+      );
+
+      const actions = el('div', 'row');
+      const saveBtn = el('button', 'primary small', 'שמור יום');
+      saveBtn.addEventListener('click', () => saveDay(i, {
+        from: fromIn.value.trim(),
+        to: toIn.value.trim(),
+        distanceKm: Number(distIn.value) || 0,
+        ascentM: Number(upIn.value) || 0,
+        descentM: Number(downIn.value) || 0,
+        story: storyIn.value.trim()
+      }));
+      const delBtn = el('button', 'danger small fit', 'מחק יום');
+      delBtn.addEventListener('click', () => deleteDay(i));
+      actions.append(saveBtn, delBtn);
+      card.appendChild(actions);
       list.appendChild(card);
+    });
+  }
+
+  // Keeps day numbers and dates in order, and moves the end date to the last day.
+  function normalizeDays(days, startDate) {
+    return days.map((d, i) => ({ ...d, n: i + 1, date: addDays(startDate, i) }));
+  }
+
+  async function persistDays(newDays, successMsg) {
+    const t = currentTrip();
+    if (!t || !isOwnerOf(t)) return;
+    const days = normalizeDays(newDays, t.startDate);
+    const update = { days, updatedAt: serverTimestamp() };
+    if (days.length) update.endDate = days[days.length - 1].date;
+    try {
+      await updateDoc(doc(db, 'trips', t.id), update);
+      $('detailStatus').textContent = successMsg;
+    } catch (err) {
+      $('detailStatus').textContent = 'השמירה נכשלה: ' + err.code;
     }
-    $('gearNote').textContent = (t.gear || []).length
-      ? `נוספו ${t.gear.length} קטגוריות ציוד מהתבנית.` : '';
+  }
+
+  async function saveDay(i, values) {
+    const t = currentTrip();
+    if (!t) return;
+    if (!values.from || !values.to) { alert('חובה למלא נקודת התחלה וסיום'); return; }
+    const days = [...(t.days || [])];
+    days[i] = { ...days[i], ...values };
+    await persistDays(days, `יום ${i + 1} נשמר`);
+  }
+
+  async function deleteDay(i) {
+    const t = currentTrip();
+    if (!t) return;
+    if (!confirm(`למחוק את יום ${i + 1}?`)) return;
+    const days = (t.days || []).filter((_, idx) => idx !== i);
+    await persistDays(days, 'היום נמחק');
+  }
+
+  $('addDayBtn').addEventListener('click', async () => {
+    const t = currentTrip();
+    if (!t) return;
+    const days = [...(t.days || []), {
+      n: (t.days || []).length + 1,
+      from: '', to: '', distanceKm: 0, ascentM: 0, descentM: 0, story: '', date: ''
+    }];
+    await persistDays(days, 'נוסף יום חדש. מלא את הפרטים ולחץ שמור יום.');
+  });
+
+  // ---------- Gear checklist ----------
+  function renderGear(t, isOwner) {
+    const gear = t.gear || [];
+    const key = JSON.stringify(gear) + '|' + isOwner;
+    if (key === lastGearKey) return;
+    lastGearKey = key;
+
+    const list = $('gearList');
+    list.innerHTML = '';
+    $('gearSection').classList.toggle('hidden', !gear.length);
+    gear.forEach((cat, ci) => {
+      list.appendChild(el('div', 'gearcat', cat.title || 'ציוד'));
+      (cat.items || []).forEach((item, ii) => {
+        const row = el('label', 'check');
+        const box = document.createElement('input');
+        box.type = 'checkbox';
+        box.checked = !!item.checked;
+        box.disabled = !isOwner;
+        box.addEventListener('change', () => toggleGear(ci, ii, box.checked));
+        row.append(box, document.createTextNode(item.label || ''));
+        list.appendChild(row);
+      });
+    });
+  }
+
+  async function toggleGear(ci, ii, checked) {
+    const t = currentTrip();
+    if (!t || !isOwnerOf(t)) return;
+    const gear = JSON.parse(JSON.stringify(t.gear || []));
+    gear[ci].items[ii].checked = checked;
+    try {
+      await updateDoc(doc(db, 'trips', t.id), { gear, updatedAt: serverTimestamp() });
+    } catch (err) {
+      $('detailStatus').textContent = 'עדכון הציוד נכשל: ' + err.code;
+    }
   }
 
   $('backBtn').addEventListener('click', () => {
@@ -504,14 +671,14 @@
 
   $('tripForm').addEventListener('submit', async e => {
     e.preventDefault();
-    const t = trips.find(x => x.id === currentTripId);
-    if (!t || !currentUser || t.ownerUid !== currentUser.uid) return;
+    const t = currentTrip();
+    if (!t || !isOwnerOf(t)) return;
     const startDate = $('dStart').value;
     const endDate = $('dEnd').value;
     if (endDate < startDate) { alert('תאריך הסיום חייב להיות אחרי תאריך ההתחלה'); return; }
 
     // If the start date moved, keep the day dates in sync with it.
-    const days = (t.days || []).map((d, i) => ({ ...d, date: addDays(startDate, i) }));
+    const days = normalizeDays(t.days || [], startDate);
 
     try {
       await updateDoc(doc(db, 'trips', t.id), {
@@ -523,15 +690,15 @@
         days,
         updatedAt: serverTimestamp()
       });
-      $('detailStatus').textContent = 'השינויים נשמרו';
+      $('detailStatus').textContent = 'הפרטים נשמרו';
     } catch (err) {
       $('detailStatus').textContent = 'השמירה נכשלה: ' + err.code;
     }
   });
 
   $('confirmBtn').addEventListener('click', async () => {
-    const t = trips.find(x => x.id === currentTripId);
-    if (!t || !currentUser || t.ownerUid !== currentUser.uid) return;
+    const t = currentTrip();
+    if (!t || !isOwnerOf(t)) return;
     const next = t.status === 'confirmed' ? 'draft' : 'confirmed';
     try {
       await updateDoc(doc(db, 'trips', t.id), { status: next, updatedAt: serverTimestamp() });
@@ -542,8 +709,8 @@
   });
 
   $('deleteBtn').addEventListener('click', async () => {
-    const t = trips.find(x => x.id === currentTripId);
-    if (!t || !currentUser || t.ownerUid !== currentUser.uid) return;
+    const t = currentTrip();
+    if (!t || !isOwnerOf(t)) return;
     if (!confirm('למחוק את "' + t.title + '" לצמיתות?')) return;
     try {
       await deleteDoc(doc(db, 'trips', t.id));
