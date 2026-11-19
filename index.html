@@ -44,6 +44,9 @@
   .check{display:flex;gap:8px;align-items:center;margin:4px 0;font-size:15px}
   .check input{width:auto;margin:0}
   .dayhead{display:flex;justify-content:space-between;align-items:center}
+  select{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font:inherit;margin:6px 0 4px;background:#fff}
+  .invite{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px;margin:6px 0}
+  .member{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)}
 </style>
 </head>
 <body>
@@ -129,6 +132,24 @@
       <div id="gearList"></div>
     </div>
 
+    <div class="section" id="membersSection">
+      <h3 style="margin:0 0 6px">חברים</h3>
+      <div id="membersList"></div>
+
+      <div id="inviteBox" class="hidden">
+        <label>הרשאה לקישור החדש
+          <select id="inviteRole">
+            <option value="viewer">צופה</option>
+            <option value="editor">עורך</option>
+          </select>
+        </label>
+        <button class="primary" id="createInviteBtn" style="width:100%;margin-top:8px">צור קישור הזמנה</button>
+        <p class="note">הרשאת עורך תופעל בשלב הבא. כרגע כל המשתתפים צופים.</p>
+        <div id="inviteList"></div>
+      </div>
+      <p class="note" id="inviteStatus"></p>
+    </div>
+
     <div class="section">
       <button class="ok" id="confirmBtn">אשר את הטיול</button>
       <p class="note" id="confirmNote"></p>
@@ -151,7 +172,7 @@
   } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js";
   import {
     getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp,
-    doc, updateDoc, deleteDoc, getDocs
+    doc, updateDoc, deleteDoc, getDocs, getDoc, setDoc, arrayUnion, arrayRemove, deleteField
   } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js";
 
   const GOOGLE_WEB_CLIENT_ID = "494703540488-6doup5uslfs4f6q5o332nntp6gt9ef1v.apps.googleusercontent.com";
@@ -274,6 +295,7 @@
       $('userName').textContent = user.displayName || user.email;
       showView('list');
       loadTrips(user.uid);
+      tryJoin(user.uid);
     } else {
       $('userBar').classList.add('hidden');
       $('listView').classList.add('hidden');
@@ -480,8 +502,10 @@
     $('dTime').value = t.departureTime || '08:00';
     $('dLocation').value = t.location || '';
     $('detailStatus').textContent = '';
+    $('inviteStatus').textContent = '';
     showView('trip');
     renderTripDetail();
+    if (isOwnerOf(t)) refreshInvites();
   }
 
   function renderTripDetail() {
@@ -515,6 +539,7 @@
 
     renderDays(t, isOwner);
     renderGear(t, isOwner);
+    renderMembers(t, isOwner);
   }
 
   // Rebuilds the day editor only when the data changed, so typing is not overwritten.
@@ -661,6 +686,157 @@
       await updateDoc(doc(db, 'trips', t.id), { gear, updatedAt: serverTimestamp() });
     } catch (err) {
       $('detailStatus').textContent = 'עדכון הציוד נכשל: ' + err.code;
+    }
+  }
+
+  // ---------- Members ----------
+  function renderMembers(t, isOwner) {
+    const list = $('membersList');
+    list.innerHTML = '';
+    const members = t.memberUids || [];
+    $('inviteBox').classList.toggle('hidden', !isOwner);
+
+    members.forEach((uid, i) => {
+      const row = el('div', 'member');
+      const isThisOwner = uid === t.ownerUid;
+      const isMe = currentUser && uid === currentUser.uid;
+      const label = isThisOwner ? 'בעלים' : ((t.roles && t.roles[uid]) === 'editor' ? 'עורך' : 'צופה');
+      const name = el('span', '', `משתתף ${i + 1}${isMe ? ' (אתה)' : ''}`);
+      row.append(name, el('small', 'note', label));
+
+      if (isOwner && !isThisOwner) {
+        const rm = el('button', 'danger small fit', 'הסר');
+        rm.addEventListener('click', () => removeMember(uid));
+        row.appendChild(rm);
+      }
+      list.appendChild(row);
+    });
+  }
+
+  async function removeMember(uid) {
+    const t = currentTrip();
+    if (!t || !isOwnerOf(t)) return;
+    if (!confirm('להסיר את המשתתף מהטיול?')) return;
+    try {
+      await updateDoc(doc(db, 'trips', t.id), {
+        memberUids: arrayRemove(uid),
+        [`roles.${uid}`]: deleteField()
+      });
+      $('inviteStatus').textContent = 'המשתתף הוסר';
+    } catch (err) {
+      $('inviteStatus').textContent = 'ההסרה נכשלה: ' + err.code;
+    }
+  }
+
+  // ---------- Invites (owner only) ----------
+  function makeCode() {
+    const bytes = new Uint8Array(12);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, b => b.toString(36).padStart(2, '0')).join('').slice(0, 20);
+  }
+
+  function inviteLink(code) {
+    return `${location.origin}${location.pathname}?join=${code}`;
+  }
+
+  async function refreshInvites() {
+    const t = currentTrip();
+    if (!isOwnerOf(t)) return;
+    const list = $('inviteList');
+    list.innerHTML = '';
+    try {
+      const q = query(collection(db, 'invites'),
+        where('ownerUid', '==', currentUser.uid),
+        where('tripId', '==', t.id));
+      const snap = await getDocs(q);
+      if (snap.empty) {
+        list.appendChild(el('p', 'note', 'אין עדיין קישורי הזמנה.'));
+        return;
+      }
+      snap.docs.forEach(d => renderInvite(d.id, d.data(), list));
+    } catch (err) {
+      list.appendChild(el('p', 'note', 'שגיאה בטעינת הקישורים: ' + err.code));
+    }
+  }
+
+  function renderInvite(code, inv, list) {
+    const row = el('div', 'invite');
+    const info = el('span', '',
+      `${inv.role === 'editor' ? 'עורך' : 'צופה'} · ${inv.active ? 'פעיל' : 'בוטל'}`);
+    row.appendChild(info);
+
+    if (inv.active) {
+      const copy = el('button', 'secondary small', 'העתק קישור');
+      copy.addEventListener('click', async () => {
+        const link = inviteLink(code);
+        try {
+          await navigator.clipboard.writeText(link);
+          $('inviteStatus').textContent = 'הקישור הועתק';
+        } catch (err) {
+          prompt('העתק את הקישור:', link);
+        }
+      });
+      const off = el('button', 'danger small', 'בטל');
+      off.addEventListener('click', async () => {
+        try {
+          await updateDoc(doc(db, 'invites', code), { active: false });
+          $('inviteStatus').textContent = 'הקישור בוטל';
+          refreshInvites();
+        } catch (err) {
+          $('inviteStatus').textContent = 'הביטול נכשל: ' + err.code;
+        }
+      });
+      row.append(copy, off);
+    }
+    list.appendChild(row);
+  }
+
+  $('createInviteBtn').addEventListener('click', async () => {
+    const t = currentTrip();
+    if (!isOwnerOf(t)) return;
+    const role = $('inviteRole').value;
+    const code = makeCode();
+    try {
+      await setDoc(doc(db, 'invites', code), {
+        tripId: t.id,
+        ownerUid: currentUser.uid,
+        role,
+        active: true,
+        createdAt: serverTimestamp()
+      });
+      $('inviteStatus').textContent = 'נוצר קישור חדש. העתק ושלח אותו.';
+      refreshInvites();
+    } catch (err) {
+      $('inviteStatus').textContent = 'יצירת הקישור נכשלה: ' + err.code;
+    }
+  });
+
+  // ---------- Joining through an invite link ----------
+  async function tryJoin(uid) {
+    const code = new URLSearchParams(location.search).get('join');
+    if (!code) return;
+    history.replaceState({}, '', location.pathname);
+
+    try {
+      const invSnap = await getDoc(doc(db, 'invites', code));
+      if (!invSnap.exists() || !invSnap.data().active) {
+        showStatus('הקישור לא תקף או שבוטל.');
+        return;
+      }
+      const inv = invSnap.data();
+      if (inv.ownerUid === uid) {
+        showStatus('זה הקישור שלך. אתה כבר בעל הטיול.');
+        return;
+      }
+      await updateDoc(doc(db, 'trips', inv.tripId), {
+        memberUids: arrayUnion(uid),
+        [`roles.${uid}`]: inv.role,
+        lastJoin: { uid, code, at: new Date().toISOString() }
+      });
+      showStatus('הצטרפת לטיול.');
+      setTimeout(clearStatus, 3000);
+    } catch (err) {
+      showStatus('לא ניתן להצטרף. ייתכן שכבר חבר בטיול, או שהקישור בוטל.');
     }
   }
 
