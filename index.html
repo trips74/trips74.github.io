@@ -622,6 +622,16 @@
   .seg .tab-btn{width:100%}
 
   .offline-bar{position:sticky;top:0;z-index:20;background:#FFF6E5;border-bottom:1px solid #E8C170;padding:8px 12px;text-align:center;font-size:14px}
+  .hero-head{display:flex;gap:14px;align-items:center}
+  .hero-logo{width:84px;height:84px;object-fit:contain;border-radius:16px;background:#0b1f3a;flex:0 0 auto;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+  .hero-head h1{margin:0 0 4px}
+  .hero-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:16px}
+  .hero-tile{background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:14px;padding:12px 8px;font:inherit;font-size:13px;cursor:pointer;display:flex;flex-direction:column;gap:6px;align-items:center;text-align:center;min-height:86px;justify-content:center}
+  .hero-tile .ico{font-size:20px}
+  .hero-tile b{font-weight:600;line-height:1.3}
+  .site-foot{text-align:center;color:var(--muted);font-size:13px;padding:24px 16px 32px}
+  .site-foot p{margin:4px 0}
+  .foot-logo{height:30px;width:auto;vertical-align:middle;margin-inline:6px}
 </style>
 </head>
 <body>
@@ -658,12 +668,26 @@
         <div class="seg">
           <button type="button" class="tab-btn" id="srcBlank">מאפס</button>
           <button type="button" class="tab-btn" id="srcTpl">מתבנית</button>
+          <button type="button" class="tab-btn" id="srcAi">עם AI</button>
         </div>
 
         <div id="tplBox" class="hidden" style="margin-top:12px">
           <input id="tplSearch" placeholder="חיפוש תבנית לפי שם או אזור" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;font:inherit">
           <div id="tplList"></div>
           <p class="msg-line" id="tplSummary"></p>
+        </div>
+
+        <div id="aiBox" class="hidden" style="margin-top:12px">
+          <label class="field">אזור<input id="aiRegion" maxlength="60" placeholder="למשל: הגליל, הדרום, הכנרת"></label>
+          <label class="field">מספר ימים<input id="aiDays" type="number" min="1" max="10" value="3"></label>
+          <label class="field">רמה<select id="aiLevel">
+            <option value="easy">קל</option>
+            <option value="medium" selected>בינוני</option>
+            <option value="hard">קשה</option>
+          </select></label>
+          <label class="field">הערות (לא חובה)<input id="aiNotes" maxlength="200" placeholder="למשל: עם ילדים, בלי עליות חדות"></label>
+          <div class="btn-row"><button class="btn-primary" type="button" id="aiGenBtn">צור טיוטה</button></div>
+          <p class="msg-line" id="aiStatus"></p>
         </div>
 
         <label class="field">שם הטיול<input id="tripTitle" required maxlength="80"></label>
@@ -683,13 +707,23 @@
   <section id="tripView" class="hidden">
     <div class="trip-hero">
       <button class="back-link" id="backBtn">← חזרה לרשימה</button>
-      <h1 id="detailTitle"></h1>
-      <div class="hero-sub" id="summaryLine"></div>
-      <div style="margin-top:10px"><span class="status-pill" id="detailBadge">טיוטה</span></div>
+      <div class="hero-head">
+        <img class="hero-logo" src="./logo-sm.jpg" alt="Hoodie">
+        <div>
+          <h1 id="detailTitle"></h1>
+          <div class="hero-sub" id="summaryLine"></div>
+          <span class="status-pill" id="detailBadge">טיוטה</span>
+        </div>
+      </div>
+      <div class="hero-tiles">
+        <button class="hero-tile" id="tileWeather"><span class="ico">🌤</span><b id="weatherText">מזג אוויר</b></button>
+        <button class="hero-tile" id="tileLodging"><span class="ico">🛏</span><b id="lodgingText">לינה</b></button>
+        <button class="hero-tile" id="tileLocation"><span class="ico">📍</span><b>שיתוף מיקום</b></button>
+        <button class="hero-tile" id="icsBtn"><span class="ico">📅</span><b>הוסף ליומן</b></button>
+      </div>
       <div class="hero-actions">
         <button class="hero-btn" id="editToggleBtn">ערוך</button>
         <button class="hero-btn" id="inviteTabBtn">הזמן חברים</button>
-        <button class="hero-btn" id="icsBtn">📅 הוסף ליומן</button>
       </div>
     </div>
 
@@ -724,6 +758,11 @@
       <div id="pane-soon" class="hidden"></div>
 
       <p id="detailStatus" class="msg-line"></p>
+
+      <footer class="site-foot">
+        <p>נבנה עבור קבוצת הטיול · התוכנים בטבעים "לינה" ו"הסעה" משותפים לכולם</p>
+        <p>Created by <img class="foot-logo" src="./sm-mark.png" alt="SM"></p>
+      </footer>
     </div>
   </section>
 
@@ -777,6 +816,9 @@
   let editMode = false;
   let createMode = 'blank';
   let selectedTplId = null;
+  let aiDraft = null;
+  const weatherCache = new Map();
+  const PLAN_URL = 'https://trips-search.hoodie-app08-trips.workers.dev/plan';
   let lastRouteKey = null;
   let lastGearKey = null;
   let lastMembersKey = null;
@@ -938,11 +980,15 @@
   function highlightSource() {
     $('srcBlank').classList.toggle('active', createMode === 'blank');
     $('srcTpl').classList.toggle('active', createMode === 'template');
+    $('srcAi').classList.toggle('active', createMode === 'ai');
   }
 
   function resetCreateForm() {
     createMode = 'blank';
     selectedTplId = null;
+    aiDraft = null;
+    $('aiBox').classList.add('hidden');
+    $('aiStatus').textContent = '';
     $('tripTitle').value = '';
     $('startDate').value = '';
     $('endDate').value = '';
@@ -1002,21 +1048,70 @@
   $('srcBlank').addEventListener('click', () => {
     createMode = 'blank';
     selectedTplId = null;
+    aiDraft = null;
+    $('aiBox').classList.add('hidden');
     $('tplBox').classList.add('hidden');
     $('tplSummary').textContent = '';
     highlightSource();
   });
   $('srcTpl').addEventListener('click', () => {
     createMode = 'template';
+    aiDraft = null;
+    $('aiBox').classList.add('hidden');
     $('tplBox').classList.remove('hidden');
     highlightSource();
     loadTemplates();
   });
+  $('srcAi').addEventListener('click', () => {
+    createMode = 'ai';
+    selectedTplId = null;
+    $('tplBox').classList.add('hidden');
+    $('aiBox').classList.remove('hidden');
+    highlightSource();
+  });
+
+  $('aiGenBtn').addEventListener('click', async () => {
+    if (!currentUser) return;
+    const region = $('aiRegion').value.trim();
+    const days = Number($('aiDays').value);
+    if (region.length < 2) { alert('כתוב אזור, למשל: הגליל'); return; }
+    if (!Number.isInteger(days) || days < 1 || days > 10) { alert('מספר הימים בין 1 ל-10'); return; }
+
+    const genBtn = $('aiGenBtn');
+    genBtn.disabled = true;
+    $('aiStatus').textContent = 'יוצר טיוטה… זה יכול לקחת כחצי דקה.';
+    try {
+      const token = await currentUser.getIdToken();
+      const r = await fetch(PLAN_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ region, days, level: $('aiLevel').value, notes: $('aiNotes').value.trim() })
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        $('aiStatus').textContent = data.error || 'היצירה נכשלה. נסה שוב.';
+        return;
+      }
+      aiDraft = data.draft;
+      if (!$('tripTitle').value.trim()) $('tripTitle').value = aiDraft.title;
+      if ($('startDate').value) $('endDate').value = addDays($('startDate').value, aiDraft.days.length - 1);
+      const unverified = aiDraft.days.filter(d => d.source !== 'source').length;
+      $('aiStatus').textContent = `הטיוטה מוכנה: ${aiDraft.days.length} ימים. ` +
+        (unverified ? `${unverified} ימים מוערכים, בדוק אותם במפה. ` : '') +
+        'בחר תאריך התחלה וצור טיול, ואז תוכל לערוך את הכול.';
+    } catch (err) {
+      $('aiStatus').textContent = 'שגיאת רשת. בדוק חיבור ונסה שוב.';
+    } finally {
+      genBtn.disabled = false;
+    }
+  });
+
   $('tplSearch').addEventListener('input', renderTemplates);
   $('startDate').addEventListener('change', () => {
     const t = templates.find(x => x.id === selectedTplId);
-    if (t && $('startDate').value && (t.days || []).length) {
-      $('endDate').value = addDays($('startDate').value, t.days.length - 1);
+    const src = t || aiDraft;
+    if (src && $('startDate').value && (src.days || []).length) {
+      $('endDate').value = addDays($('startDate').value, src.days.length - 1);
     }
   });
   $('cancelBtn').addEventListener('click', resetCreateForm);
@@ -1030,23 +1125,27 @@
 
     const tpl = createMode === 'template' ? templates.find(x => x.id === selectedTplId) : null;
     if (createMode === 'template' && !tpl) { alert('בחר תבנית מהרשימה, או עבור ל"מאפס"'); return; }
+    if (createMode === 'ai' && !aiDraft) { alert('צור טיוטה עם AI לפני שמירה'); return; }
 
-    const days = tpl ? (tpl.days || []).map((d, i) => ({
+    // Blank trips start empty. Template and AI trips copy their days and gear as a draft.
+    const src = tpl || (createMode === 'ai' ? aiDraft : null);
+    const days = src ? (src.days || []).map((d, i) => ({
       n: i + 1, from: d.from || '', to: d.to || '',
       distanceKm: Number(d.distanceKm) || 0, ascentM: Number(d.ascentM) || 0, descentM: Number(d.descentM) || 0,
       story: d.story || '', date: addDays(startDate, i)
     })) : [];
 
-    const gear = tpl ? (tpl.gear || []).map(g => ({
+    const gear = src ? (src.gear || []).map(g => ({
       title: g.title || '',
       items: (g.items || []).map(item => ({ label: item, checked: false }))
     })) : [];
 
+    const origin = createMode === 'template' ? 'template' : (createMode === 'ai' ? 'ai' : 'manual');
     try {
       await addDoc(collection(db, 'trips'), {
         title: $('tripTitle').value.trim(), startDate, endDate,
-        departureTime: '08:00', location: tpl ? (tpl.region || '') : '',
-        status: 'draft', origin: tpl ? 'template' : 'manual', originRef: tpl ? tpl.id : null,
+        departureTime: '08:00', location: src ? (src.region || '') : '',
+        status: 'draft', origin, originRef: tpl ? tpl.id : null,
         days, gear, ownerUid: currentUser.uid, memberUids: [currentUser.uid],
         createdAt: serverTimestamp()
       });
@@ -1107,6 +1206,7 @@
 
     $('detailTitle').textContent = t.title;
     $('summaryLine').textContent = summaryText(t);
+    renderHeaderTiles(t);
     $('detailBadge').textContent = confirmed ? 'מאושר' : 'טיוטה';
     $('detailBadge').className = 'status-pill' + (confirmed ? ' ok' : '');
     $('draftBar').classList.toggle('hidden', confirmed || !isOwner);
@@ -1137,6 +1237,50 @@
     if (currentTab === 'transport') renderTransport(t, canEdit);
     if (currentTab === 'links') renderLinks(t, canEdit);
   }
+
+  function renderHeaderTiles(t) {
+    const nights = nightsOf(t).length;
+    const confirmed = (t.lodging || []).slice(0, nights).filter(l => l && l.status === 'confirmed').length;
+    $('lodgingText').textContent = nights ? `לינה · ${confirmed}/${nights} מאושרות` : 'אין לילות לינה';
+    loadWeather(t);
+  }
+
+  async function loadWeather(t) {
+    const out = $('weatherText');
+    if (!t.location || !t.startDate || !t.endDate) { out.textContent = 'הוסף מיקום לתחזית'; return; }
+    const key = [t.id, t.location, t.startDate, t.endDate].join('|');
+    if (weatherCache.has(key)) { out.textContent = weatherCache.get(key); return; }
+    const today = todayIso();
+    if (t.endDate < today) { out.textContent = 'הטיול הסתיים'; return; }
+    const limit = addDays(today, 15);
+    if (t.startDate > limit) { out.textContent = 'התחזית תופיע קרוב לתאריך'; return; }
+    out.textContent = 'טוען מזג אוויר…';
+    try {
+      const geo = await (await fetch('https://geocoding-api.open-meteo.com/v1/search?count=1&language=he&name=' +
+        encodeURIComponent(t.location))).json();
+      const place = geo.results && geo.results[0];
+      if (!place) { out.textContent = 'לא נמצא מיקום לתחזית'; return; }
+      const end = t.endDate < limit ? t.endDate : limit;
+      const f = await (await fetch('https://api.open-meteo.com/v1/forecast?latitude=' + place.latitude +
+        '&longitude=' + place.longitude +
+        '&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max' +
+        '&timezone=Asia%2FJerusalem&start_date=' + t.startDate + '&end_date=' + end)).json();
+      const d = f.daily;
+      if (!d || !d.time || !d.time.length) { out.textContent = 'תחזית לא זמינה'; return; }
+      const max = Math.round(Math.max(...d.temperature_2m_max));
+      const min = Math.round(Math.min(...d.temperature_2m_min));
+      const rain = Math.round(Math.max(...d.precipitation_probability_max.map(x => x || 0)));
+      const text = `${min}°–${max}° · גשם עד ${rain}%`;
+      weatherCache.set(key, text);
+      out.textContent = text;
+    } catch (err) {
+      out.textContent = 'מזג אוויר לא זמין כרגע';
+    }
+  }
+
+  $('tileWeather').addEventListener('click', () => { currentTab = 'links'; renderTripDetail(); });
+  $('tileLodging').addEventListener('click', () => { currentTab = 'lodging'; renderTripDetail(); });
+  $('tileLocation').addEventListener('click', () => { currentTab = 'transport'; renderTripDetail(); });
 
   function renderTabbar() {
     const bar = $('tabbar');
@@ -1824,51 +1968,96 @@
   }
 
   // ---------- Links (קישורים) ----------
+  function linkRow(href, icon, title, sub) {
+    const row = el('div', 'link-item');
+    const ico = el('div', 'ico', icon);
+    const txt = el('div', 'txt');
+    txt.append(el('b', '', title), el('span', '', sub || ''));
+    if (href) {
+      const a = el('a', '');
+      a.href = href; a.target = '_blank'; a.rel = 'noopener';
+      a.style.cssText = 'display:flex;align-items:center;gap:12px;flex:1;color:inherit;text-decoration:none';
+      a.append(ico, txt);
+      row.appendChild(a);
+    } else {
+      row.append(ico, txt);
+    }
+    return row;
+  }
+
+  function mapsUrl(params) {
+    return 'https://www.google.com/maps/dir/?api=1&' + params;
+  }
+
   function renderLinks(t, canEdit) {
     const pane = $('pane-links');
     const links = t.links || [];
-    const first = (t.days || [])[0];
-    const key = JSON.stringify(links) + '|' + canEdit + '|' + (first ? first.from : '');
+    const days = t.days || [];
+    const first = days[0];
+    const last = days[days.length - 1];
+    const journal = safeHref(t.journalUrl);
+    const key = JSON.stringify([links, journal, days.map(d => d.from + d.to), canEdit]);
     if (key === lastLinksKey) return;
     lastLinksKey = key;
 
     pane.innerHTML = '';
-    if (first && first.from) {
-      pane.appendChild(el('div', 'sec-label', 'ניווט למוצא הטיול'));
-      const nav = el('a', 'link-item');
-      nav.href = 'https://www.google.com/maps/dir/?api=1&destination=' +
-        encodeURIComponent(first.from) + '&travelmode=driving';
-      nav.target = '_blank'; nav.rel = 'noopener';
-      const ico = el('div', 'ico', '🚗');
-      const txt = el('div', 'txt');
-      txt.append(el('b', '', `ניווט ל${first.from}`), el('span', '', 'נקודת הזינוק של יום 1 — Google Maps'));
-      nav.append(ico, txt);
-      pane.appendChild(nav);
+
+    pane.appendChild(el('div', 'sec-label', 'נסיעה ותחבורה'));
+    pane.appendChild(linkRow('https://www.rail.co.il/', '🚆', 'רכבת ישראל', 'לוח זמנים ורכישת כרטיסים'));
+    pane.appendChild(linkRow('https://www.egged.co.il/', '🚌', 'אגד', 'קווים ולוחות זמנים'));
+    if (first) {
+      pane.appendChild(linkRow(mapsUrl('destination=' + encodeURIComponent(first.from) + '&travelmode=transit'),
+        '🚌', `תחבורה ציבורית ל${first.from}`, 'נקודת הזינוק של יום 1'));
+      pane.appendChild(linkRow(mapsUrl('destination=' + encodeURIComponent(first.from) + '&travelmode=driving'),
+        '🚗', `ניווט ל${first.from}`, 'נסיעה ברכב'));
+    }
+    if (last && first) {
+      pane.appendChild(linkRow(mapsUrl('origin=' + encodeURIComponent(last.to) +
+        '&destination=' + encodeURIComponent(first.from) + '&travelmode=transit'),
+        '🔙', 'חזרה מהסיום', `תחבורה ציבורית מ${last.to}`));
+    }
+
+    pane.appendChild(el('div', 'sec-label', 'מזג אוויר ושמורות'));
+    pane.appendChild(linkRow('https://ims.gov.il/', '🌦', 'השירות המטאורולוגי', 'תחזית רשמית'));
+    pane.appendChild(linkRow('https://www.parks.org.il/', '🌿', 'רשות הטבע והגנים', 'סטטוס סגירות שמורות ושבילים'));
+
+    pane.appendChild(el('div', 'sec-label', 'מפות'));
+    if (first && last) {
+      const waypoints = days.slice(0, -1).map(d => d.to).filter(Boolean).map(encodeURIComponent).join('|');
+      const wp = waypoints ? '&waypoints=' + waypoints : '';
+      pane.appendChild(linkRow(mapsUrl('origin=' + encodeURIComponent(first.from) +
+        '&destination=' + encodeURIComponent(last.to) + wp + '&travelmode=walking'),
+        '🗺', 'מפת כל המסלול', 'כל הימים על מפה אחת'));
+    }
+    pane.appendChild(el('div', 'info-box', 'מפה לכל יום נמצאת בלשונית מסלול, בכל כרטיס יום.'));
+
+    pane.appendChild(el('div', 'sec-label', 'יומן מסע'));
+    if (journal) {
+      pane.appendChild(linkRow(journal, '📖', 'יומן המסע', new URL(journal).hostname));
+    } else {
+      pane.appendChild(el('div', 'info-box', canEdit
+        ? 'עדיין לא הוגדר יומן מסע. הוסף קישור למטה.'
+        : 'עדיין אין יומן מסע לטיול הזה.'));
     }
 
     pane.appendChild(el('div', 'sec-label', 'קישורים שימושיים'));
-    if (!links.length) pane.appendChild(el('div', 'info-box', 'עדיין אין קישורים לטיול.'));
+    if (!links.length) pane.appendChild(el('div', 'info-box', 'עדיין אין קישורים נוספים לטיול.'));
     links.forEach(item => {
-      const href = safeHref(item.url);
-      const row = el('div', 'link-item');
-      const ico = el('div', 'ico', item.icon || '🔗');
-      const txt = el('div', 'txt');
-      txt.append(el('b', '', item.title || 'קישור'), el('span', '', href ? new URL(href).hostname : ''));
-      if (href) {
-        const a = el('a', '');
-        a.href = href; a.target = '_blank'; a.rel = 'noopener';
-        a.style.cssText = 'display:flex;align-items:center;gap:12px;flex:1;color:inherit;text-decoration:none';
-        a.append(ico, txt);
-        row.appendChild(a);
-      } else {
-        row.append(ico, txt);
-      }
+      const row = linkRow(safeHref(item.url), item.icon || '🔗', item.title || 'קישור',
+        safeHref(item.url) ? new URL(safeHref(item.url)).hostname : '');
       if (canEdit) row.appendChild(btn('מחק', 'btn-danger btn-small', () => removeLink(item)));
       pane.appendChild(row);
     });
 
     if (canEdit) {
       const panel = el('div', 'edit-panel');
+      panel.appendChild(el('h3', '', 'יומן מסע'));
+      const journalIn = inputOf('text', t.journalUrl || '');
+      journalIn.placeholder = 'https://...';
+      panel.append(
+        field('קישור ליומן המסע', journalIn, true),
+        btn('שמור יומן מסע', 'btn-primary', () => saveJournal(journalIn))
+      );
       panel.appendChild(el('h3', '', 'הוספת קישור'));
       const titleIn = inputOf('text', '');
       const urlIn = inputOf('text', ''); urlIn.placeholder = 'https://...';
@@ -1880,6 +2069,19 @@
         btn('הוסף קישור', 'btn-primary', () => addLink(titleIn, urlIn, iconIn))
       );
       pane.appendChild(panel);
+    }
+  }
+
+  async function saveJournal(input) {
+    const t = currentTrip();
+    if (!isOwnerOf(t)) return;
+    const url = input.value.trim();
+    if (url && !safeHref(url)) { alert('הכתובת חייבת להתחיל ב-https://'); return; }
+    try {
+      await updateDoc(doc(db, 'trips', t.id), { journalUrl: url, updatedAt: serverTimestamp() });
+      $('detailStatus').textContent = 'יומן המסע נשמר';
+    } catch (err) {
+      $('detailStatus').textContent = 'השמירה נכשלה: ' + err.code;
     }
   }
 
