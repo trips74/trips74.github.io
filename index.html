@@ -632,6 +632,9 @@
   .site-foot{text-align:center;color:var(--muted);font-size:13px;padding:24px 16px 32px}
   .site-foot p{margin:4px 0}
   .foot-logo{height:30px;width:auto;vertical-align:middle;margin-inline:6px}
+  .sum-dates{font-size:15px;margin-top:4px;opacity:.95}
+  .sum-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .sum-chip{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);border-radius:999px;padding:4px 12px;font-size:13px;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -842,6 +845,32 @@
     return dt.getFullYear() + '-' + pad(dt.getMonth() + 1) + '-' + pad(dt.getDate());
   }
 
+  // Trip screen summary: dates on one line, facts as separate chips
+  function renderSummary(t) {
+    const box = $('summaryLine');
+    box.innerHTML = '';
+    const dates = el('div', 'sum-dates');
+    const bd = document.createElement('bdi');
+    bd.textContent = `${fmtDate(t.startDate)} עד ${fmtDate(t.endDate)}`;
+    dates.appendChild(bd);
+    box.appendChild(dates);
+
+    const days = t.days || [];
+    const km = days.reduce((sum, d) => sum + (Number(d.distanceKm) || 0), 0);
+    const up = days.reduce((sum, d) => sum + (Number(d.ascentM) || 0), 0);
+    const row = el('div', 'sum-row');
+    const chip = text => el('span', 'sum-chip', text);
+    if (days.length) {
+      row.append(
+        chip(`${days.length} ימים`),
+        chip(`${km.toFixed(1)} ק״מ`),
+        chip(`עלייה ${Math.round(up).toLocaleString('he-IL')} מ׳`)
+      );
+    }
+    if (t.location) row.appendChild(chip(`📍 ${t.location}`));
+    if (row.childNodes.length) box.appendChild(row);
+  }
+
   // Shown as dd.mm.yyyy. Stored and calculated as yyyy-mm-dd.
   function fmtDate(iso) {
     if (!iso) return '';
@@ -901,7 +930,7 @@
     const days = t.days || [];
     const km = days.reduce((s, d) => s + (Number(d.distanceKm) || 0), 0);
     const up = days.reduce((s, d) => s + (Number(d.ascentM) || 0), 0);
-    const parts = [`${fmtDate(t.startDate)} — ${fmtDate(t.endDate)}`];
+    const parts = [`${fmtDate(t.startDate)} עד ${fmtDate(t.endDate)}`];
     if (days.length) parts.push(`${days.length} ימים`, `${km.toFixed(1)} ק״מ`, `עלייה ${Math.round(up)} מ׳`);
     if (t.location) parts.push(t.location);
     return parts.join(' · ');
@@ -1212,7 +1241,7 @@
     const confirmed = t.status === 'confirmed';
 
     $('detailTitle').textContent = t.title;
-    $('summaryLine').textContent = summaryText(t);
+    renderSummary(t);
     renderHeaderTiles(t);
     $('detailBadge').textContent = confirmed ? 'מאושר' : 'טיוטה';
     $('detailBadge').className = 'status-pill' + (confirmed ? ' ok' : '');
