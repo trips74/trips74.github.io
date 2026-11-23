@@ -1316,7 +1316,18 @@
 
   $('tileWeather').addEventListener('click', () => { currentTab = 'links'; renderTripDetail(); });
   $('tileLodging').addEventListener('click', () => { currentTab = 'lodging'; renderTripDetail(); });
-  $('tileLocation').addEventListener('click', () => { currentTab = 'transport'; renderTripDetail(); });
+  $('tileLocation').addEventListener('click', () => {
+    const t = currentTrip();
+    if (!t) return;
+    const group = safeHref(t.transport && t.transport.groupLink);
+    if (group) {
+      window.open(group, '_blank', 'noopener');
+      return;
+    }
+    currentTab = 'transport';
+    renderTripDetail();
+    $('detailStatus').textContent = 'עדיין לא נוספה קבוצת וואטסאפ. העורך יכול להוסיף אותה בלשונית הסעה.';
+  });
 
   function renderTabbar() {
     const bar = $('tabbar');
