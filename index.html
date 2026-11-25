@@ -981,7 +981,7 @@
       $('userLine').textContent = user.displayName || user.email || '';
       showScreen('list');
       loadTrips(user.uid);
-      tryJoin(user.uid);
+      tryJoin(user);
     } else {
       showScreen(null);
       $('listView').classList.add('hidden');
@@ -1196,6 +1196,7 @@
         departureTime: '08:00', location: src ? (src.region || '') : '',
         status: 'draft', origin, originRef: tpl ? tpl.id : null,
         days, gear, ownerUid: currentUser.uid, memberUids: [currentUser.uid],
+        memberNames: { [currentUser.uid]: currentUser.displayName || currentUser.email || '' },
         createdAt: serverTimestamp()
       });
       resetCreateForm();
@@ -1702,8 +1703,9 @@
   function memberLabel(t, uid) {
     const idx = (t.memberUids || []).indexOf(uid);
     if (idx < 0) return 'משתתף שעזב';
+    const name = (t.memberNames && t.memberNames[uid]) || `משתתף ${idx + 1}`;
     const me = currentUser && uid === currentUser.uid ? ' (אתה)' : '';
-    return `משתתף ${idx + 1}${me}`;
+    return `${name}${me}`;
   }
 
   // Net balance per member: positive = should receive, negative = owes
@@ -2302,7 +2304,8 @@
       const isThisOwner = uid === t.ownerUid;
       const isMe = currentUser && uid === currentUser.uid;
       const role = isThisOwner ? 'בעלים' : ((t.roles && t.roles[uid]) === 'editor' ? 'עורך' : 'צופה');
-      row.append(el('span', '', `משתתף ${i + 1}${isMe ? ' (אתה)' : ''}`), el('small', 'msg-line', role));
+      const name = (t.memberNames && t.memberNames[uid]) || (isThisOwner ? 'בעלים' : `משתתף ${i + 1}`);
+      row.append(el('span', '', `${name}${isMe ? ' (אתה)' : ''}`), el('small', 'msg-line', role));
       if (isOwner && !isThisOwner) {
         const sel = document.createElement('select');
         sel.style.width = 'auto';
@@ -2350,7 +2353,11 @@
     if (!isOwnerOf(t)) return;
     if (!confirm('להסיר את המשתתף מהטיול?')) return;
     try {
-      await updateDoc(doc(db, 'trips', t.id), { memberUids: arrayRemove(uid), [`roles.${uid}`]: deleteField() });
+      await updateDoc(doc(db, 'trips', t.id), {
+        memberUids: arrayRemove(uid),
+        [`roles.${uid}`]: deleteField(),
+        [`memberNames.${uid}`]: deleteField()
+      });
       setInviteStatus('המשתתף הוסר');
     } catch (err) {
       setInviteStatus('ההסרה נכשלה: ' + err.code);
@@ -2430,7 +2437,9 @@
   }
 
   // ---------- Joining through a link ----------
-  async function tryJoin(uid) {
+  async function tryJoin(user) {
+    const uid = user.uid;
+    const name = user.displayName || user.email || '';
     const code = new URLSearchParams(location.search).get('join');
     if (!code) return;
     history.replaceState({}, '', location.pathname);
@@ -2442,6 +2451,7 @@
       await updateDoc(doc(db, 'trips', inv.tripId), {
         memberUids: arrayUnion(uid),
         [`roles.${uid}`]: inv.role,
+        [`memberNames.${uid}`]: name,
         lastJoin: { uid, code, at: new Date().toISOString() }
       });
       showStatus('הצטרפת לטיול.');
