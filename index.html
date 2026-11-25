@@ -1019,9 +1019,62 @@
       const row = el('div', '');
       row.append(el('span', 't', t.title), document.createTextNode(' '),
         el('span', 'status-pill' + (t.status === 'confirmed' ? ' ok' : ''), t.status === 'confirmed' ? 'מאושר' : 'טיוטה'));
-      card.append(row, el('small', '', summaryText(t)));
+      const actions = el('div', 'btn-row');
+      if (isOwnerOf(t)) {
+        const del = el('button', 'btn-danger btn-small fit', 'מחק טיול');
+        del.addEventListener('click', e => { e.stopPropagation(); deleteTripFully(t); });
+        actions.appendChild(del);
+      } else {
+        const leave = el('button', 'btn-soft btn-small fit', 'הסר מהרשימה');
+        leave.addEventListener('click', e => { e.stopPropagation(); leaveTrip(t); });
+        actions.appendChild(leave);
+      }
+      card.append(row, el('small', '', summaryText(t)), actions);
       card.addEventListener('click', () => openTrip(t.id));
       list.appendChild(card);
+    }
+  }
+
+  // Owner only: deletes the trip for everyone, with its expenses and contacts
+  async function deleteTripFully(t) {
+    if (!t || !isOwnerOf(t)) return;
+    if (!confirm(`למחוק את "${t.title}" לכולם? המחיקה סופית, וכל המשתתפים יאבדו את הטיול.`)) return;
+    try {
+      const exp = await getDocs(collection(db, 'trips', t.id, 'expenses'));
+      const con = await getDocs(collection(db, 'trips', t.id, 'contacts'));
+      await Promise.all([...exp.docs, ...con.docs].map(d => deleteDoc(d.ref)));
+      await deleteDoc(doc(db, 'trips', t.id));
+      if (currentTripId === t.id) {
+        unsubscribeExpenses();
+        unsubscribeContacts();
+        currentTripId = null;
+        editMode = false;
+        showScreen('list');
+      }
+    } catch (err) {
+      showStatus('המחיקה נכשלה: ' + err.code);
+    }
+  }
+
+  // Any participant except the owner: removes the trip from their own list only
+  async function leaveTrip(t) {
+    if (!t || !currentUser || isOwnerOf(t)) return;
+    if (!confirm(`להסיר את "${t.title}" מהרשימה שלך? אפשר להצטרף שוב דרך קישור ההזמנה.`)) return;
+    const uid = currentUser.uid;
+    try {
+      await updateDoc(doc(db, 'trips', t.id), {
+        memberUids: arrayRemove(uid),
+        [`roles.${uid}`]: deleteField(),
+        [`memberNames.${uid}`]: deleteField()
+      });
+      if (currentTripId === t.id) {
+        unsubscribeExpenses();
+        unsubscribeContacts();
+        currentTripId = null;
+        showScreen('list');
+      }
+    } catch (err) {
+      showStatus('ההסרה נכשלה: ' + err.code);
     }
   }
 
@@ -1555,26 +1608,7 @@
     }
   });
 
-  $('deleteBtn').addEventListener('click', async () => {
-    const t = currentTrip();
-    if (!isOwnerOf(t)) return;
-    if (!confirm('למחוק את "' + t.title + '" לצמיתות?')) return;
-    try {
-      // Remove the trip's expenses first, so no orphan records remain
-      const exp = await getDocs(collection(db, 'trips', t.id, 'expenses'));
-      await Promise.all(exp.docs.map(d => deleteDoc(d.ref)));
-      const contactsSnap = await getDocs(collection(db, 'trips', t.id, 'contacts'));
-      await Promise.all(contactsSnap.docs.map(d => deleteDoc(d.ref)));
-      await deleteDoc(doc(db, 'trips', t.id));
-      unsubscribeExpenses();
-      unsubscribeContacts();
-      currentTripId = null;
-      editMode = false;
-      showScreen('list');
-    } catch (err) {
-      $('detailStatus').textContent = 'המחיקה נכשלה: ' + err.code;
-    }
-  });
+  $('deleteBtn').addEventListener('click', () => deleteTripFully(currentTrip()));
 
   // ---------- Lodging (one card per night) ----------
   const LODGING_STATUS = [
