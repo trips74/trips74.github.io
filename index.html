@@ -722,6 +722,7 @@
         <button class="hero-tile" id="tileWeather"><span class="ico">🌤</span><b id="weatherText">מזג אוויר</b></button>
         <button class="hero-tile" id="tileLodging"><span class="ico">🛏</span><b id="lodgingText">לינה</b></button>
         <button class="hero-tile" id="tileLocation"><span class="ico">📍</span><b>שיתוף מיקום</b></button>
+        <button class="hero-tile" id="tileMap"><span class="ico">🗺</span><b>מפת הטיול</b></button>
         <button class="hero-tile" id="icsBtn"><span class="ico">📅</span><b>הוסף ליומן</b></button>
       </div>
       <div class="hero-actions">
@@ -1329,6 +1330,19 @@
 
   $('tileWeather').addEventListener('click', () => { currentTab = 'links'; renderTripDetail(); });
   $('tileLodging').addEventListener('click', () => { currentTab = 'lodging'; renderTripDetail(); });
+  $('tileMap').addEventListener('click', () => {
+    const t = currentTrip();
+    if (!t) return;
+    const map = safeHref(t.mapUrl);
+    if (map) {
+      window.open(map, '_blank', 'noopener');
+      return;
+    }
+    currentTab = 'links';
+    renderTripDetail();
+    $('detailStatus').textContent = 'עדיין לא נוספה מפת טיול. העורך יכול להוסיף אותה בלשונית קישורים.';
+  });
+
   $('tileLocation').addEventListener('click', () => {
     const t = currentTrip();
     if (!t) return;
@@ -2067,11 +2081,29 @@
     const first = days[0];
     const last = days[days.length - 1];
     const journal = safeHref(t.journalUrl);
-    const key = JSON.stringify([links, journal, days.map(d => d.from + d.to), canEdit]);
+    const key = JSON.stringify([links, journal, t.mapUrl || '', days.map(d => d.from + d.to), canEdit]);
     if (key === lastLinksKey) return;
     lastLinksKey = key;
 
     pane.innerHTML = '';
+
+    pane.appendChild(el('div', 'sec-label', 'מפת הטיול'));
+    const mainMap = safeHref(t.mapUrl);
+    if (mainMap) {
+      pane.appendChild(linkRow(mainMap, '🗺', 'מפת הטיול ב-Mapeak', 'פתוחה לכל מי שיש לו את הקישור'));
+      pane.appendChild(btn('העתק קישור למפה', 'btn-soft btn-small', async () => {
+        try {
+          await navigator.clipboard.writeText(mainMap);
+          $('detailStatus').textContent = 'קישור המפה הועתק';
+        } catch (err) {
+          prompt('העתק את הקישור:', mainMap);
+        }
+      }));
+    } else {
+      pane.appendChild(el('div', 'info-box', canEdit
+        ? 'עדיין לא הוגדרה מפת טיול. הוסף קישור Mapeak למטה.'
+        : 'עדיין לא הוגדרה מפת טיול.'));
+    }
 
     pane.appendChild(el('div', 'sec-label', 'נסיעה ותחבורה'));
     pane.appendChild(linkRow('https://www.rail.co.il/', '🚆', 'רכבת ישראל', 'לוח זמנים ורכישת כרטיסים'));
@@ -2126,6 +2158,13 @@
 
     if (canEdit) {
       const panel = el('div', 'edit-panel');
+      panel.appendChild(el('h3', '', 'מפת הטיול'));
+      const mapIn = inputOf('text', t.mapUrl || '');
+      mapIn.placeholder = 'https://mapeak.com/share/...';
+      panel.append(
+        field('קישור Mapeak לכל הטיול', mapIn, true),
+        btn('שמור מפת טיול', 'btn-primary', () => saveMapUrl(mapIn))
+      );
       panel.appendChild(el('h3', '', 'יומן מסע'));
       const journalIn = inputOf('text', t.journalUrl || '');
       journalIn.placeholder = 'https://...';
@@ -2144,6 +2183,19 @@
         btn('הוסף קישור', 'btn-primary', () => addLink(titleIn, urlIn, iconIn))
       );
       pane.appendChild(panel);
+    }
+  }
+
+  async function saveMapUrl(input) {
+    const t = currentTrip();
+    if (!canEditTrip(t)) return;
+    const url = input.value.trim();
+    if (url && !safeHref(url)) { alert('הכתובת חייבת להתחיל ב-https://'); return; }
+    try {
+      await updateDoc(doc(db, 'trips', t.id), { mapUrl: url, updatedAt: serverTimestamp() });
+      $('detailStatus').textContent = 'מפת הטיול נשמרה';
+    } catch (err) {
+      $('detailStatus').textContent = 'השמירה נכשלה: ' + err.code;
     }
   }
 
