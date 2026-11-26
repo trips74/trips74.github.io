@@ -649,6 +649,45 @@
   .feature b{font-size:15px;font-weight:600}
   .feature span{font-size:12px;color:var(--muted);line-height:1.5}
   .login-cta{text-align:center;margin-top:22px}
+
+  /* ---- Mobile layout (Android and iPhone) ---- */
+  html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  *, *::before, *::after { box-sizing: border-box; }
+  img, svg { max-width: 100%; }
+  input, select, textarea { font-size: 16px; max-width: 100%; }   /* stops iPhone from zooming in */
+  button { max-width: 100%; }
+  .pane { max-width: 680px; margin: 0 auto; padding: 16px; }
+  /* Headers and tab bar line up with the content below them */
+  .trip-hero { padding: 22px max(16px, calc(50% - 324px)) 18px; padding-top: calc(22px + env(safe-area-inset-top, 0px)); }
+  .tabbar { padding-inline: max(16px, calc(50% - 324px)); }
+  .hero-head { align-items: center; }
+  .hero-head > div { min-width: 0; }
+  .hero-head h1 { overflow-wrap: anywhere; }
+  .hero-tiles { grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); }
+  .hero-actions .hero-btn { flex: 1 1 auto; text-align: center; }
+  .btn-row { align-items: stretch; }
+  .trip-card, .gear-group, .edit-panel, .info-box, .day-card { max-width: 100%; overflow-wrap: anywhere; }
+  .day-edit { grid-template-columns: 1fr; }
+  .day-edit .field.full { grid-column: auto; }
+  .stats-row { flex-wrap: wrap; }
+  .sum-row { gap: 6px; }
+  .sum-chip { white-space: normal; }
+  footer.site-foot { padding-bottom: calc(32px + env(safe-area-inset-bottom, 0px)); }
+  @media (max-width: 480px) {
+    .trip-hero { padding-inline: 16px; }
+    .tabbar { padding-inline: 12px; }
+    .pane { padding: 12px; }
+    .hero-logo { width: 64px; height: 64px; border-radius: 14px; }
+    .group-frame.hero { width: 76px; height: 76px; }
+    .hero-head { gap: 10px; }
+    .hero-head h1 { font-size: 21px; }
+    .hero-tiles { gap: 6px; }
+    .hero-tile { min-height: 78px; padding: 10px 6px; font-size: 12px; }
+    .login-logo { width: 110px; height: 110px; }
+    .login-hero h1 { font-size: 24px; }
+    .feature-grid { grid-template-columns: 1fr; }
+    .tab-btn { padding: 8px 12px; }
+  }
 </style>
 </head>
 <body>
@@ -685,6 +724,13 @@
         <p>כדי להתחיל, התחבר עם חשבון Google.</p>
         <div id="gsiButton" style="display:flex;justify-content:center;margin:12px 0"></div>
         <p class="msg-line">פתחת את הקישור מתוך וואטסאפ? אם ההתחברות לא עובדת, לחץ על שלוש הנקודות ובחר "פתח בדפדפן".</p>
+        <details class="privacy">
+          <summary>מדיניות פרטיות</summary>
+          <p><b>מה נשמר:</b> שם התצוגה מחשבון Google (ואם אין, כתובת המייל), הטיולים שיצרת או שהצטרפת אליהם, והימים, הלינה, הציוד, ההוצאות, אנשי הקשר, הקישורים ותמונת הקבוצה שהוספת.</p>
+          <p><b>מי רואה:</b> התוכן משותף רק עם משתתפי הטיול. לא נאסף מיקום של המכשיר, ולא נשמרת סיסמה.</p>
+          <p><b>מחיקה:</b> כפתור "מחק את כל הנתונים שלי" ברשימת הטיולים מוחק את הנתונים שלך מהאפליקציה. חשבון Google שלך לא נמחק.</p>
+          <p dir="ltr"><b>Privacy:</b> We store your Google display name (or email if none), trips you create or join, and the content you add. Content is shared only with trip members. No device location or passwords are stored. The "Delete all my data" button removes your data from the app; your Google account is not affected.</p>
+        </details>
       </div>
     </div>
   </section>
@@ -738,6 +784,18 @@
       </form>
 
       <div id="tripList"></div>
+    </div>
+    <div class="pane" style="padding-top:0">
+      <div class="section" style="margin-top:8px">
+        <details class="privacy" style="margin-bottom:12px">
+          <summary>מדיניות פרטיות</summary>
+          <p><b>מה נשמר:</b> שם התצוגה מחשבון Google (ואם אין, כתובת המייל), הטיולים שיצרת או שהצטרפת אליהם, והימים, הלינה, הציוד, ההוצאות, אנשי הקשר, הקישורים ותמונת הקבוצה שהוספת.</p>
+          <p><b>מי רואה:</b> התוכן משותף רק עם משתתפי הטיול. לא נאסף מיקום של המכשיר, ולא נשמרת סיסמה.</p>
+          <p><b>מחיקה:</b> כפתור "מחק את כל הנתונים שלי" ברשימת הטיולים מוחק את הנתונים שלך מהאפליקציה. חשבון Google שלך לא נמחק.</p>
+          <p dir="ltr"><b>Privacy:</b> We store your Google display name (or email if none), trips you create or join, and the content you add. Content is shared only with trip members. No device location or passwords are stored. The "Delete all my data" button removes your data from the app; your Google account is not affected.</p>
+        </details>
+        <button class="btn-soft" id="deleteMyDataBtn" style="width:100%">מחק את כל הנתונים שלי</button>
+      </div>
     </div>
   </section>
 
@@ -1188,6 +1246,45 @@
 
   // The login screen uses the same logo as the header
   $('loginLogo').src = document.querySelector('.hero-logo').src;
+
+  // Deletes everything the user owns, removes them from the rest, then signs out.
+  // The Google account itself is not changed.
+  async function deleteMyData() {
+    if (!currentUser) return;
+    if (!confirm('למחוק את כל הנתונים שלך מהאפליקציה?\n\nטיולים שיצרת יימחקו לכולם. מכל טיול שהצטרפת אליו תוסר. חשבון Google שלך לא יושפע.')) return;
+    const word = prompt('כדי לאשר, הקלד את המילה: מחק');
+    if (word !== 'מחק') { showStatus('המחיקה בוטלה'); return; }
+
+    const uid = currentUser.uid;
+    try {
+      showStatus('מוחק את הנתונים… אל תסגור את העמוד.');
+      for (const t of [...trips]) {
+        if (t.ownerUid === uid) {
+          const exp = await getDocs(collection(db, 'trips', t.id, 'expenses'));
+          const con = await getDocs(collection(db, 'trips', t.id, 'contacts'));
+          await Promise.all([...exp.docs, ...con.docs].map(d => deleteDoc(d.ref)));
+          await deleteDoc(doc(db, 'trips', t.id));
+        } else {
+          await updateDoc(doc(db, 'trips', t.id), {
+            memberUids: arrayRemove(uid),
+            [`roles.${uid}`]: deleteField(),
+            [`memberNames.${uid}`]: deleteField()
+          });
+        }
+      }
+      const invites = await getDocs(query(collection(db, 'invites'), where('ownerUid', '==', uid)));
+      await Promise.all(invites.docs.map(d => deleteDoc(d.ref)));
+      unsubscribeExpenses();
+      unsubscribeContacts();
+      currentTripId = null;
+      await signOut(auth);
+      showStatus('כל הנתונים שלך נמחקו מהאפליקציה.');
+    } catch (err) {
+      showStatus('המחיקה לא הושלמה (' + err.code + '). אפשר לנסות שוב.');
+    }
+  }
+
+  $('deleteMyDataBtn').addEventListener('click', deleteMyData);
 
   // ---------- Create trip: blank or from template ----------
   function highlightSource() {
