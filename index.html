@@ -1395,7 +1395,8 @@
       const r = await fetch(PLAN_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body: JSON.stringify({ region, days, level: $('aiLevel').value, notes: $('aiNotes').value.trim() })
+        body: JSON.stringify({ region, days, level: $('aiLevel').value, notes: $('aiNotes').value.trim() }),
+        signal: AbortSignal.timeout(40000)
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) {
@@ -1410,7 +1411,9 @@
         (unverified ? `${unverified} ימים מוערכים, בדוק אותם במפה. ` : '') +
         'בחר תאריך התחלה וצור טיול, ואז תוכל לערוך את הכול.';
     } catch (err) {
-      $('aiStatus').textContent = 'שגיאת רשת. בדוק חיבור ונסה שוב.';
+      $('aiStatus').textContent = (err.name === 'TimeoutError' || err.name === 'AbortError')
+        ? 'השירות לא ענה בזמן. נסה שוב.'
+        : 'שגיאת רשת. בדוק חיבור ונסה שוב.';
     } finally {
       genBtn.disabled = false;
     }
