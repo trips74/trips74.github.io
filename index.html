@@ -745,6 +745,25 @@
     .hero-tile .ico { width: 34px; height: 34px; font-size: 16px; }
     .hero-tile b { font-size: 12.5px; }
   }
+
+  /* ---- Trip header: status and dates, location, stat tiles ---- */
+  .meta-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+  .meta-dates { font-size: 15px; font-weight: 500; letter-spacing: .2px; }
+  .meta-loc { margin-top: 8px; font-size: 14px; opacity: .95; }
+  .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+  .stat-tile {
+    background: linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,.08));
+    border: 1px solid rgba(255,255,255,.30); border-radius: 16px; padding: 12px 6px;
+    text-align: center; display: flex; flex-direction: column; gap: 4px; align-items: center;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 6px 14px rgba(0,0,0,.16);
+  }
+  .stat-tile .si { font-size: 18px; line-height: 1; }
+  .stat-tile .sv { font-size: 16px; font-weight: 700; text-shadow: 0 1px 2px rgba(0,0,0,.25); }
+  .stat-tile .sl { font-size: 12px; opacity: .85; }
+  @media (max-width: 480px) {
+    .stat-grid { gap: 8px; }
+    .stat-tile .sv { font-size: 15px; }
+  }
 </style>
 </head>
 <body>
@@ -1017,29 +1036,41 @@
   }
 
   // Trip screen summary: dates on one line, facts as separate chips
+  function statTile(icon, value, label) {
+    const tile = el('div', 'stat-tile');
+    tile.append(el('div', 'si', icon), el('div', 'sv', value), el('div', 'sl', label));
+    return tile;
+  }
+
+  // Trip header: status and dates on one line, location below, and three stat tiles
   function renderSummary(t) {
+    $('detailBadge').style.display = 'none';
     const box = $('summaryLine');
     box.innerHTML = '';
-    const dates = el('div', 'sum-dates');
-    const bd = document.createElement('bdi');
-    bd.textContent = `${fmtDate(t.startDate)} עד ${fmtDate(t.endDate)}`;
-    dates.appendChild(bd);
-    box.appendChild(dates);
+
+    const meta = el('div', 'meta-row');
+    const confirmed = t.status === 'confirmed';
+    meta.appendChild(el('span', 'status-pill' + (confirmed ? ' ok' : ''), confirmed ? 'מאושר' : 'טיוטה'));
+    const dates = document.createElement('bdi');
+    dates.className = 'meta-dates';
+    dates.textContent = `${fmtDate(t.startDate)} - ${fmtDate(t.endDate)}`;
+    meta.appendChild(dates);
+    box.appendChild(meta);
+
+    if (t.location) box.appendChild(el('div', 'meta-loc', `📍 ${t.location}`));
 
     const days = t.days || [];
-    const km = days.reduce((sum, d) => sum + (Number(d.distanceKm) || 0), 0);
-    const up = days.reduce((sum, d) => sum + (Number(d.ascentM) || 0), 0);
-    const row = el('div', 'sum-row');
-    const chip = text => el('span', 'sum-chip', text);
     if (days.length) {
-      row.append(
-        chip(`${days.length} ימים`),
-        chip(`${km.toFixed(1)} ק״מ`),
-        chip(`עלייה ${Math.round(up).toLocaleString('he-IL')} מ׳`)
+      const km = days.reduce((sum, d) => sum + (Number(d.distanceKm) || 0), 0);
+      const up = days.reduce((sum, d) => sum + (Number(d.ascentM) || 0), 0);
+      const grid = el('div', 'stat-grid');
+      grid.append(
+        statTile('⛰', `${Math.round(up).toLocaleString('he-IL')} מ׳`, 'עלייה'),
+        statTile('🥾', `${km.toFixed(1)} ק״מ`, 'מרחק'),
+        statTile('📅', `${days.length}`, 'ימים')
       );
+      box.appendChild(grid);
     }
-    if (t.location) row.appendChild(chip(`📍 ${t.location}`));
-    if (row.childNodes.length) box.appendChild(row);
   }
 
   // Shown as dd.mm.yyyy. Stored and calculated as yyyy-mm-dd.
